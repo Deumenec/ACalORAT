@@ -21,6 +21,14 @@ def broadcast_vector(v, axis, ndim):
     shape[axis] = -1            # -1 lets reshape infer v's length
     return v.reshape(shape)
 
+def mcf(ring):
+    if (ring.is_6d==True):
+        ring.disable_6d()
+        mcf = ring.mcf
+        ring.enable_6d()
+        return mcf
+    return ring.mcf
+    
 class Elements:
     """Group of elements of a certain type bpms, correctors, dipoles, or 
     quadrupoles containing all the important atributes from them with 
@@ -38,7 +46,8 @@ class Elements:
         self.alpha= np.array([all_optics[2]["alpha"][i][dir_ind] for i in ind], dtype= complex)
         self.gamma= (self.alpha*self.alpha+1)/self.beta
         self.mu   = np.array([all_optics[2]["mu"][i][dir_ind] for i in ind])
-        self.dispersion = np.array([all_optics[2]["dispersion"][i][dir_ind] for i in ind], dtype= complex)
+        self.dispersion = np.array([all_optics[2]["dispersion"][i][2*dir_ind] for i in ind], dtype= complex)
+        self.dispersionp = np.array([all_optics[2]["dispersion"][i][2*dir_ind+1] for i in ind], dtype= complex)
         #TODO reescriure això en una linea amb el hasattr sense tants ifs
         
         if hasattr(ring[ind[0]], "BendingAngle"): 
@@ -84,6 +93,8 @@ class Elements:
         self.alphaB = broadcast_vector(self.alpha, axis, ndim)
         self.gammaB = broadcast_vector(self.gamma, axis, ndim)
         self.muB = broadcast_vector(self.mu, axis, ndim)
+        self.dispersionB = broadcast_vector(self.dispersion, axis, ndim)
+        self.dispersionpB = broadcast_vector(self.dispersionp, axis, ndim)
         if (self.HasBend == True): self.BendB = broadcast_vector(self.Bend, axis, ndim)
         if (self.HasLength == True): self.LengthB = broadcast_vector(self.Length, axis, ndim)
         if (self.HasK == True): self.KB = broadcast_vector(self.K, axis, ndim)
@@ -116,6 +127,8 @@ class AnaORM:
                  ind_dip: np.ndarray,
                  ind_CFD: np.ndarray):
         self.ring     = ring
+        self.mcf = mcf(ring) #Això és fantàstic!
+        self.circumference = ring.circumference
         self.ind_bpm  = ind_bpm
         self.ind_quad = ind_quad
         self.ind_cor  = ind_cor
@@ -143,8 +156,8 @@ class AnaORM:
         return np.cos(n*np.abs(Ea.muB-Eb.muB)-n*np.pi*self.tune)
 
     def Sabn(self, Ea: Elements, Eb: Elements, n: int):
-        """IMPORTANT, cal sumar una quantitat molt peita a la funció signe perqué
-        comporti de la manera definida a l'informe
+        """IMPORTANT, cal sumar una quantitat molt petita a la funció signe perqué
+        comporti de la manera definida a l'informe!
         """
         return np.sign(Ea.muB-Eb.muB-0.00000001)*np.sin(n*np.abs(Ea.muB-Eb.muB)-n*np.pi*self.tune)
     
@@ -154,21 +167,41 @@ class AnaORM:
     def Tab_thin(self, Ea : Elements, Eb: Elements):
         return np.sqrt(Ea.betaB*Eb.betaB)/(2*np.sin(np.pi*self.tune))*self.Sabn(Ea, Eb, 1)
     
-    def Rab_thick2(self, Ea : Elements, Eb: Elements):
-        """ Returns the ORM with thick correctors WITH quadrupolar moment
+    def Rab_thick2_(self, Ea : Elements, Eb: Elements):
+        """ Returns the ORM with thick correctors WITHOUT quadrupolar moment inside
         """
+        Cij1 = self.Cabn(Ea, Eb, 1)
+        Sij1 = self.Sabn(Ea, Eb, 1)
         
-        return 0
+        Ijc = self.Ikc1_(Ea)
+        Ijs = self.Iks1_(Ea)
+        
+        return np.real(np.sqrt(Ea.betaB*Eb.betaB)/(2*np.sin(np.pi*self.tune))*(Ijc*Cij1+Ijs*Sij1))
     
+    def Rab_thick2_disp(self, Ea : Elements, Eb: Elements):
+        """ Returns the dispersion term of the ORM with thick correctors WITHOUT quadrupolar moment inside and no dipole component
+        """
+        return np.real(-Ea.dispersionB*(Eb.dispersionB+1/2*Eb.dispersionpB*Eb.LengthB))/(self.mcf*self.circumference)
+                 
     def Ik0(self, Ek: Elements):
-        """Integral term with quadrupole moment indide"""
+        """Integral for element WITH quadrupolar moment """
         return (Ek.betaB+Ek.gammaB/Ek.KB)*Ek.LengthB/2+ (Ek.betaB-Ek.gammaB/Ek.KB)*(np.sin(2*np.sqrt(Ek.KB)*Ek.LengthB))/(4*np.sqrt(Ek.KB))+Ek.alphaB/(2*Ek.KB)*(np.cos(2*np.sqrt(Ek.KB)*Ek.LengthB)-1)
 
+    def Ikc1_(self, Ek: Elements):
+        """Integral for element WITHOUT quadrupolar moment """
+        return 1-Ek.alphaB*Ek.LengthB/(2*Ek.betaB)
+        
+    def Iks1_(self, Ek: Elements):
+        """Integral for element WITHOUT quadrupolar moment """
+        return Ek.LengthB/(2*Ek.betaB)
+
+
     def Ikc1(self, Ek: Elements):
-        """Integral term with CFD """
+        """Integral for element WITH quadrupolar moment """
         return np.sqrt(Ek.betaB/Ek.KB)*np.sin(Ek.LengthB*np.sqrt(Ek.KB))+(Ek.alphaB*(np.cos(Ek.LengthB*np.sqrt(Ek.KB))-1))/(Ek.KB*np.sqrt(Ek.betaB))
         
     def Iks1(self, Ek: Elements):
+        """Integral for element WITH quadrupolar moment """
         return -(np.cos(Ek.LengthB*np.sqrt(Ek.KB))-1)/(Ek.KB*np.sqrt(Ek.betaB))
     
     def Iks2(self, Ek: Elements): 
@@ -185,16 +218,7 @@ class AnaORM:
         
     def Ijs1_q(self, Ej: Elements):
         return Ej.LengthB/(2*Ej.betaB)
-    
-    def Rab_thick2_(self, Ea : Elements, Eb: Elements):
-        """ Returns the ORM with thick correctors without quadrupolar moment
-        """
-        #TODO writte down!
-        return 0
-    
-    def Tab_thin(self, Ea : Elements, Eb: Elements):
-        return np.sqrt(Ea.betaB*Eb.betaB)/(2*np.sin(np.pi*self.tune))*self.Sabn(Ea, Eb, 1)
-    
+
     def dRij_dqk_thin(self, Ei : Elements, Ej : Elements, Ek : Elements):
         """Considers all elements as thin, results can be greatlly improved by passing average
         optics computed with the average method instead of the entrance optics, but for thick
@@ -309,9 +333,9 @@ class AnaORM:
         """Future, to calculate the ORM better, 
         """
         return 
-    def MCF(self, Em: Elements,En: Elements):
+    def aMCF(self, Em: Elements,En: Elements):
         """Calculates the mcf for a ring due to dipoles
-        Diples in the first and second component
+        Diples in the first and second component analytically
         """
         Imc1 = self.Ikc1(Em)
         Ims1 = self.Iks1(Em)
@@ -322,13 +346,15 @@ class AnaORM:
         Smn = self.Sabn(Em, En, 1)
         
         return np.real(np.sum(1/(2*np.sin(np.pi*self.tune)) * np.sum(Em.BendB/Em.LengthB*En.BendB/En.LengthB* ( Cmn*(Imc1*Inc1-Ims1*Ins1) + Smn*(Ims1*Inc1+Imc1*Ins1)), axis =1), axis =0))
-    def dMCFdq():
+    def dMCFdq(self, Ek: Elements):
         """Derivative of the MCF with respect to one quadrupole strength
         """
-        return
+        return -1/self.circumference*((Ek.dispersionB**2 + Ek.dispersionpB**2/Ek.KB)*Ek.LengthB/2 + (2*Ek.dispersionB*Ek.dispersionpB/(np.sqrt(Ek.KB))*np.sin(Ek.LengthB*np.sqrt(Ek.KB))**2+ (Ek.dispersionB**2-Ek.dispersionpB**2/Ek.KB)*np.sin(Ek.LengthB*np.sqrt(Ek.KB))*np.cos(Ek.LengthB*np.sqrt(Ek.KB)))/(2*np.sqrt(Ek.KB)))
     
-        
-        
-    
+
+    """  Dispersion of the next element formula
+    def nextdisp(self, Ei: Elements):
+        return Ei.dispersionB*np.cos(Ei.LengthB*np.sqrt(Ei.KB))+Ei.dispersionpB*np.sin(Ei.LengthB*np.sqrt(Ei.KB))/np.sqrt(Ei.KB)
+    """
         
         

@@ -28,9 +28,9 @@ import matplotlib.pyplot as plt
 ###############################################################################
 
     
-lattice_file   = 'ring_a2.mat' #Read ALBA II lattice ring_a2.mat or THERING.mat to read the ALBA one
+lattice_file   = 'THERING.mat' #Read ALBA II lattice ring_a2.mat or THERING.mat to read the ALBA one
 lattice_folder = 'lattices'
-results        = 'A2'  #A1 for the ALBA lattice and A2 for the ALBAII lattice
+results        = 'A1'  #A1 for the ALBA lattice and A2 for the ALBAII lattice
 direction      = 'v' #v: vertical h: horizontal (SI NOMÉS ES FA EL CÀLCUL D'UNA)
 step_exp       =  7
 step           =  10**(-step_exp)
@@ -45,7 +45,7 @@ max_ind        =  2     #cutoff index in polynomB
 ###############################################################################
 
 lattice_path = os.path.join(lattice_folder, lattice_file)
-ring, ind_bpm, ind_cor, ind_quad, ind_dip = read.ALBAII(lattice_path)
+ring, ind_bpm, ind_cor, ind_quad, ind_dip = read.ALBA(lattice_path)
 
 ###############################################################################
 # Configuration of path name for the different options used
@@ -100,6 +100,9 @@ if read_numerical == False:
 dORMV = np.load(os.path.join(results,prefix + "v_numdORM_dq.npy"))
 dORMH = np.load(os.path.join(results,prefix + "h_numdORM_dq.npy"))
 
+###############################################################################
+#Calculating dORM with thick elements and assessing validity
+###############################################################################
 
 #time1 = time.perf_counter()
 ###### Example calculating the dORM_dq with thin and thick elements!
@@ -125,39 +128,29 @@ hdRij_dqk = cORM.dRij_dqk_thin(cORM.bpm, cORM.cor, cORM.quad)
 #print(time2-time1)
 
 #plot_utils.plot_both(dORMV, dORMH, vdRij_dqk, hdRij_dqk)
-#plot_utils.plot_both_Zeus(dORMV, dORMH, vdRij_dqk, hdRij_dqk)
-
 #plot_utils.plot_both(dORMV, dORMH, thickv, thickh)
-#plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
 
-###########Dispersion test in bpms######################
-cORM.bpm.broadcasters(0, 2)
-cORM.dip.correct_entrance()
-cORM.dip.broadcasters(1, 2)
-bpmdispls = cORM.disp_i(cORM.bpm, cORM.dip)
-#math_utils.listPlot([cORM.bpm.dispersion ,bpmdispls ], ["bpmDisp", "bpmDispcalc"],title="bpm Dispersions" ,savename = "disps")
-########################################################
+plot_utils.plot_both_Zeus(dORMV, dORMH, vdRij_dqk, hdRij_dqk)
+plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
 
-###########Dispersion test in cors######################
-cORM.cor.broadcasters(0, 2)
-cORM.dip.broadcasters(1, 2)
-cordispls = cORM.disp_i(cORM.cor, cORM.dip)
-#math_utils.listPlot([cORM.cor.dispersion ,cordispls ], ["bpmDisp", "bpmDispcalc"],title="bpm Dispersions" ,savename = "disps")
-########################################################
-
-###########Dispersion test in dips######################
-cORM.dip1 = copy.deepcopy(cORM.dip)
-cORM.dip.broadcasters(0, 2)
-cORM.dip1.broadcasters(1, 2)
-dipdispls = cORM.disp_i(cORM.dip, cORM.dip1)
-math_utils.listPlot([cORM.dip.dispersion ,dipdispls ], ["bpmDisp", "bpmDispcalc"],title="bpm Dispersions" ,savename = "disps")
-########################################################
+###### Example calculating the derivatives of the MCF
+cORM = AnaORM.AnaORM(ring,"h" ,ind_bpm, ind_cor["h"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+cORM.quad.broadcasters(0, 1)
+dMCF = cORM.dMCFdq(cORM.quad)
+##########################################################
 
 ring.disable_6d()
-mcf = ring.mcf*ring.circumference
-mcf1=  cORM.MCF(cORM.dip, cORM.dip1)
+nMCF = []
+mcf1 = ring.mcf
+for i in range(len(ind_quad)):
+    ring[ind_quad[i]].K += 0.01
+    mcf2 = ring.mcf
+    ring[ind_quad[i]].K -= 0.01
+    nMCF.append(((mcf2-mcf1)/ 0.01))
 
-ring.enable_6d()
-print(mcf, mcf1)
+
+math_utils.listPlot([dMCF,nMCF], ["dMCF", "ndMCF"], "dMCF", "dMCF")
+
 
 

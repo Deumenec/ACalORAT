@@ -40,8 +40,8 @@ class Elements:
         ind : list of indices of those elements, assigns the optics for each calculation
         """
         if len(ind) == 0: return
-        self.ring= ring
-        self.ind = ind
+        self._ring= ring
+        self._ind = ind
         self.beta = np.array([all_optics[2]["beta"][i][dir_ind] for i in ind], dtype= complex)
         self.alpha= np.array([all_optics[2]["alpha"][i][dir_ind] for i in ind], dtype= complex)
         self.gamma= (self.alpha*self.alpha+1)/self.beta
@@ -49,23 +49,10 @@ class Elements:
         self.dispersion = np.array([all_optics[2]["dispersion"][i][2*dir_ind] for i in ind], dtype= complex)
         self.dispersionp = np.array([all_optics[2]["dispersion"][i][2*dir_ind+1] for i in ind], dtype= complex)
         #TODO reescriure això en una linea amb el hasattr sense tants ifs
-        
-        if hasattr(ring[ind[0]], "BendingAngle"): 
-            self.Bend = np.array([ring[i].BendingAngle for i in ind])
-            self.HasBend = True
-        else: self.HasBend = False
-        if hasattr(ring[ind[0]], "Length"): 
-            self.Length = np.array([ring[i].Length for i in ind])
-            self.HasLength = True
-        else: self.HasLength = False
-        if hasattr(ring[ind[0]], "K"): 
-            self.K = np.array([-sgn*ring[i].K for i in ind], dtype= complex)   
-            self.HasK = True
-        else: self.HasK = False
-        if hasattr(ring[ind[0]], "EntranceAngle"): 
-            self.EAngle = np.array([ring[i].EntranceAngle for i in ind], dtype= complex)   
-            self.HasEAngle = True
-        else: self.EAngle = False
+        if hasattr(ring[ind[0]], "BendingAngle"):self.Bend = np.array([ring[i].BendingAngle for i in ind])
+        if hasattr(ring[ind[0]], "Length"):     self.Length = np.array([ring[i].Length for i in ind])
+        if hasattr(ring[ind[0]], "K"):          self.K = np.array([-sgn*ring[i].K for i in ind], dtype= complex)
+        if hasattr(ring[ind[0]], "EntranceAngle"): self.EAngle = np.array([ring[i].EntranceAngle for i in ind], dtype= complex)   
     def correct_entrance(self):
         """ To be called for dipoles to correct the optic functions inside of
         them after the fringe field and entrance angles. And adjust force.
@@ -88,17 +75,10 @@ class Elements:
         
         Example: bpm.broadcasters(2, 3)
         """
-        self.bAxis = axis #Saving the broadcasting axis
-        self.betaB = broadcast_vector(self.beta, axis, ndim)
-        self.alphaB = broadcast_vector(self.alpha, axis, ndim)
-        self.gammaB = broadcast_vector(self.gamma, axis, ndim)
-        self.muB = broadcast_vector(self.mu, axis, ndim)
-        self.dispersionB = broadcast_vector(self.dispersion, axis, ndim)
-        self.dispersionpB = broadcast_vector(self.dispersionp, axis, ndim)
-        if (self.HasBend == True): self.BendB = broadcast_vector(self.Bend, axis, ndim)
-        if (self.HasLength == True): self.LengthB = broadcast_vector(self.Length, axis, ndim)
-        if (self.HasK == True): self.KB = broadcast_vector(self.K, axis, ndim)
-    
+        self._bAxis = axis #Saving the broadcasting axis
+        variables = [attr for attr in self.__dict__ if not attr.startswith('_')] #Crea broadcasters per totes les variables igual
+        for var in variables:
+            setattr(self, var+"B", broadcast_vector( getattr(self, var) , axis, ndim))
 
 class AnaORM:
     """Analitic Calculation of Orbit by AT
@@ -306,7 +286,11 @@ class AnaORM:
         return np.real(ana_dORM_dq) #Per assegurar que retorni un real bé
 
     def dRij_dqk_thick2q3(self, Ei : Elements, Ej : Elements, Ek : Elements):
-        """Computes the dRij_dqk asssuming thick correctors with quadrupolar moment inside and thick quadrupoles"""
+        """Computes the dRij_dqk asssuming thick correctors with quadrupolar moment inside and thick quadrupoles
+        basically it works in the same way as the other formual but remembering to apply the entrance corrections
+        to k for the dipoles!
+        """
+        
         
         return 0
         
@@ -350,11 +334,10 @@ class AnaORM:
         """Derivative of the MCF with respect to one quadrupole strength
         """
         return -1/self.circumference*((Ek.dispersionB**2 + Ek.dispersionpB**2/Ek.KB)*Ek.LengthB/2 + (2*Ek.dispersionB*Ek.dispersionpB/(np.sqrt(Ek.KB))*np.sin(Ek.LengthB*np.sqrt(Ek.KB))**2+ (Ek.dispersionB**2-Ek.dispersionpB**2/Ek.KB)*np.sin(Ek.LengthB*np.sqrt(Ek.KB))*np.cos(Ek.LengthB*np.sqrt(Ek.KB)))/(2*np.sqrt(Ek.KB)))
-    
 
-    """  Dispersion of the next element formula
+
     def nextdisp(self, Ei: Elements):
+        """  Dispersion of the next element using the dispersion at the entrance of a quadrupole"""
         return Ei.dispersionB*np.cos(Ei.LengthB*np.sqrt(Ei.KB))+Ei.dispersionpB*np.sin(Ei.LengthB*np.sqrt(Ei.KB))/np.sqrt(Ei.KB)
-    """
-        
+
         

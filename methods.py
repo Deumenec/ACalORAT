@@ -12,6 +12,25 @@ These methods work well with ALBA and ALBAII
 #Calculating dORM with thick elements and assessing validity
 ###############################################################################
 
+if read_numerical == False:
+    #I add kick angle variable to perform the numerical ORM calculation
+    #IMPORTANT, add ind_cor[sub_direction] for ALBA2
+    sub_direction = "v"
+    for ind in ind_cor[sub_direction]: ring[ind].KickAngle = np.array([0,0])
+    numerical_ORM = numerical.dORM_dq(ring, ind_bpm, ind_cor[sub_direction], ind_quad, step, sub_direction)
+    np.save(os.path.join(results,prefix + sub_direction+ "_numdORM_dq"),numerical_ORM)
+    #The other direction
+    sub_direction = "h"
+    for ind in ind_cor[sub_direction]: ring[ind].KickAngle = np.array([0,0])
+    numerical_ORM = numerical.dORM_dq(ring, ind_bpm, ind_cor[sub_direction], ind_quad, step, sub_direction)
+    np.save(os.path.join(results,prefix + sub_direction+ "_numdORM_dq"),numerical_ORM)
+    
+
+
+###############################################################################
+#Calculating dORM with thick elements and assessing validity
+###############################################################################
+
 #time1 = time.perf_counter()
 ###### Example calculating the dORM_dq with thin and thick elements!
 cORM = AnaORM.AnaORM(ring,"v" ,ind_bpm, ind_cor["v"], ind_quad, ind_dip, np.array([]))
@@ -38,7 +57,7 @@ hdRij_dqk = cORM.dRij_dqk_thin(cORM.bpm, cORM.cor, cORM.quad)
 #plot_utils.plot_both(dORMV, dORMH, vdRij_dqk, hdRij_dqk)
 #plot_utils.plot_both(dORMV, dORMH, thickv, thickh)
 
-plot_utils.plot_both_Zeus(dORMV, dORMH, vdRij_dqk, hdRij_dqk)
+#plot_utils.plot_both_Zeus(dORMV, dORMH, vdRij_dqk, hdRij_dqk)
 plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
 
 
@@ -77,8 +96,6 @@ math_utils.listPlot([cORM.dip.dispersion ,dipdispls ], ["bpmDisp", "bpmDispcalc"
 ########################################################
 
 
-
-
 ###############################################################################
 #Example displaying how the dispersion term fixes much of the extra error in the h dir in ALBA its perfect
 ###############################################################################
@@ -111,8 +128,111 @@ print(math_utils.normalized_RMSE(ORMH, nORMH, (0,1)))#6.625965837150698 amb term
 #Un kick a un corrector, comporta al seu torn un canvi de moment dipolar a tots els quadrupols, tots els quadrupols esdevenen dipols també!
 #Això suma contribucions a la ORM més petites corresponents a 
 
+###############################################################################
+#MCF examples
+###############################################################################
 
 
+###### Example calculating the derivatives of the MCF #This formula only works for the ALBA I lattice as for ALBA II 
+cORM = AnaORM.AnaORM(ring,"h" ,ind_bpm, ind_cor["h"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+cORM.quad.broadcasters(0, 1)
+dMCF = cORM.dMCFdq(cORM.quad)
+##########################################################
+
+#######Numerical calculation of the derivative of the mcf#########
+ring.disable_6d()
+nMCF = []
+mcf1 = ring.mcf
+for i in range(len(ind_quad)):
+    ring[ind_quad[i]].K += 0.01
+    mcf2 = ring.mcf
+    ring[ind_quad[i]].K -= 0.01
+    nMCF.append(((mcf2-mcf1)/ 0.01))
+
+plt.plot()
+math_utils.listPlot([dMCF,nMCF], ["dMCF", "ndMCF"], "dMCF", "dMCF")
+
+
+
+
+
+
+
+
+
+"""
+###############################################################################
+#Calculating dORM with thick elements and assessing validity
+###############################################################################
+
+#time1 = time.perf_counter()
+###### Example calculating the dORM_dq with thin and thick elements!
+cORM = AnaORM.AnaORM(ring,"v" ,ind_bpm, ind_cor["v"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+#cORM.dip.correct_entrance()
+cORM.bpm.broadcasters(1, 3)
+cORM.cor.broadcasters(2, 3)
+cORM.dip.broadcasters(0, 3)
+thickv = cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.dip)
+##########################################################
+
+###### Example calculating the dORM_dq with thin and thick elements!
+cORM = AnaORM.AnaORM(ring,"h" ,ind_bpm, ind_cor["h"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+#cORM.dip.correct_entrance()
+cORM.bpm.broadcasters(1, 3)
+cORM.cor.broadcasters(2, 3)
+cORM.dip.broadcasters(0, 3)
+thickh = cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.dip)
+##########################################################
+#time2 = time.perf_counter()
+#print(time2-time1)
+
+#plot_utils.plot_both(dORMV, dORMH, vdRij_dqk, hdRij_dqk)
+plot_utils.plot_both(dORMV, dORMH, thickv, thickh)
+
+plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
+
+"""
+
+###############################################################################
+#Calculating dORM with thick elements and assessing validity
+###############################################################################
+
+#time1 = time.perf_counter()
+###### Example calculating the dORM_dq with thin and thick elements!
+cORM = AnaORM.AnaORM(ring,"v" ,ind_bpm, ind_cor["v"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+cORM.bpm.broadcasters(1, 3)
+cORM.cor.broadcasters(2, 3)
+cORM.quad.broadcasters(0, 3)
+thickv = cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad)
+vdRij_dqk = cORM.dRij_dqk_thin(cORM.bpm, cORM.cor, cORM.quad)
+##########################################################
+
+###### Example calculating the dORM_dq with thin and thick elements!
+cORM = AnaORM.AnaORM(ring,"h" ,ind_bpm, ind_cor["h"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+cORM.bpm.broadcasters(1, 3)
+cORM.cor.broadcasters(2, 3)
+cORM.quad.broadcasters(0, 3)
+thickh = cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad)
+hdRij_dqk = cORM.dRij_dqk_thin(cORM.bpm, cORM.cor, cORM.quad)
+##########################################################
+#time2 = time.perf_counter()
+#print(time2-time1)
+
+#plot_utils.plot_both(dORMV, dORMH, vdRij_dqk, hdRij_dqk)
+#plot_utils.plot_both(dORMV, dORMH, thickv, thickh)
+
+#plot_utils.plot_both_Zeus(dORMV, dORMH, vdRij_dqk, hdRij_dqk)
+plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
+
+
+
+
+ 
 
 
 

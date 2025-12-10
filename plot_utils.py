@@ -40,10 +40,10 @@ def plot_both(ORMv, ORMh, nORMv, nORMh, latex = False):
     
 def plot_both_Zeus(ORMv, ORMh, nORMv, nORMh, latex = False):
     
-    vquadERROR = math_utils.errorZeus(nORMv, ORMv)
+    vquadERROR = math_utils.errorZeus(ORMv, nORMv)
     vERROR = math_utils.normalized_RMSE(ORMv, nORMv,(0,1,2))
 
-    hquadERROR = math_utils.errorZeus(nORMh, ORMh)
+    hquadERROR = math_utils.errorZeus(ORMh, nORMh)
     hERROR = math_utils.normalized_RMSE(ORMh, nORMh, (0,1,2))
     #Creating the plot Zeus asked me to:
        

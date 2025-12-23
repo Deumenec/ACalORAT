@@ -229,11 +229,146 @@ hdRij_dqk = cORM.dRij_dqk_thin(cORM.bpm, cORM.cor, cORM.quad)
 #plot_utils.plot_both_Zeus(dORMV, dORMH, vdRij_dqk, hdRij_dqk)
 plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
 
+###############################################################################
+#Tests regarding kicker response to CFD activation
+###############################################################################
 
+original_orbit = at.find_orbit6(ring, refpts=ind_bpm)[1]
+(ring[ind_dip[30]]).PolynomB[0]+=0.00000001
+uncorrected_orbit = at.find_orbit(ring, refpts=ind_bpm)[1]
+correction1, final_orbit1 = numerical.kick_cor(ring , ind_bpm, ind_cor, 0.0000000001, original_orbit)
 
+(ring[ind_dip[30]]).PolynomB[0]-=0.00000002
+#Test for the linearity of the response with respect to kickangles
+uncorrected_orbit2 = at.find_orbit(ring, refpts=ind_bpm)[1]
+correction2, final_orbit2 = numerical.kick_cor(ring , ind_bpm, ind_cor, 0.0000000001, original_orbit)
 
+oo= np.array([i[0] for i in original_orbit])
+uo= np.array([i[0] for i in uncorrected_orbit])
+co1= np.array([i[0] for i in final_orbit1])
+co2= np.array([i[0] for i in final_orbit2])
+
+math_utils.listPlot([oo, uo, co1, co2], ["original","uncorrected" ,"corrected+", "corrected-"],"Kicker Orbit correction", "orbit_correction")
+plt.show()
  
 
+
+###############################################################################
+#Calculating actual ORM with thick elements and assessing validity
+###############################################################################
+
+#time1 = time.perf_counter()
+###### Example calculating the dORM_dq with thin and thick elements!
+cORM = AnaORM.AnaORM(ring,"v" ,ind_bpm, ind_cor["v"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+cORM.bpm.broadcasters(0, 2)
+cORM.cor.broadcasters(1, 2)
+numORMv = numerical.ORM(ring, "v", ind_bpm, ind_cor["v"])
+anaORMv = cORM.Rab_thick2_(cORM.bpm, cORM.cor)
+##########################################################
+
+###### Example calculating the dORM_dq with thin and thick elements!
+cORM = AnaORM.AnaORM(ring,"h" ,ind_bpm, ind_cor["h"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+cORM.bpm.broadcasters(0, 2)
+cORM.cor.broadcasters(1, 2)
+numORMh = numerical.ORM(ring, "h", ind_bpm, ind_cor["h"])
+anaORMh = cORM.Rab_thick2_(cORM.bpm, cORM.cor) + cORM.Rab_thick2_disp(cORM.bpm, cORM.cor)
+##########################################################
+
+print(math_utils.normalized_RMSE(numORMv, anaORMv, (0,1)))
+print(math_utils.normalized_RMSE(numORMh, anaORMh, (0,1)))
+
+
+###############################################################################
+# Loading saved numerical dORMs to perform comparisons
+###############################################################################
+    
+#dORMV = np.load(os.path.join(results,prefix + "v_numdORM_dq.npy"))
+#dORMH = np.load(os.path.join(results,prefix + "h_numdORM_dq.npy"))
+
+
+original_orbit = at.find_orbit6(ring, refpts=ind_bpm)[1]
+(ring[ind_dip[30]]).PolynomB[0]+=0.00000001
+uncorrected_orbit = at.find_orbit6(ring, refpts=ind_bpm)[1]
+correction1, final_orbit1 = numerical.kick_cor(ring , ind_bpm, ind_cor, 0.0000000001, original_orbit)
+
+(ring[ind_dip[30]]).PolynomB[0]-=0.00000002
+#Test for the linearity of the response with respect to kickangles
+uncorrected_orbit2 = at.find_orbit6(ring, refpts=ind_bpm)[1]
+correction2, final_orbit2 = numerical.kick_cor(ring , ind_bpm, ind_cor, 0.0000000001, original_orbit) #At the bpms
+
+oo= np.array([i[0] for i in original_orbit])
+uo= np.array([i[0] for i in uncorrected_orbit])
+co1= np.array([i[0] for i in final_orbit1])
+co2= np.array([i[0] for i in final_orbit2])
+
+math_utils.listPlot([oo, uo, co1, co2], ["original","uncorrected" ,"corrected+", "corrected-"],"Kicker Orbit correction", "orbit_correction")
+plt.show()
+
+#TODO revisar tots els mètodes i integrarlos en funcions que els apliquin directament per no haver de tocar res més
+
+###############################################################################
+#Calculating dORM with thick elements and assessing validity
+###############################################################################
+
+#time1 = time.perf_counter()
+###### Example calculating the dORM_dq with thin and thick elements!
+
+
+cORM = AnaORM.AnaORM(ring,"v" ,ind_bpm, ind_cor["v"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+cORM.bpm.broadcasters(1, 3)
+cORM.cor.broadcasters(2, 3)
+cORM.quad.broadcasters(0, 3)
+thickv = cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad)
+##########################################################
+
+###### Example calculating the dORM_dq with thin and thick elements!
+cORM = AnaORM.AnaORM(ring,"h" ,ind_bpm, ind_cor["h"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+cORM.bpm.broadcasters(1, 3)
+cORM.cor.broadcasters(2, 3)
+cORM.quad.broadcasters(0, 3)
+thickh = cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad)
+##########################################################
+#time2 = time.perf_counter()
+#print(time2-time1)
+
+#plot_utils.plot_both(dORMV, dORMH, vdRij_dqk, hdRij_dqk)
+#plot_utils.plot_both(dORMV, dORMH, thickv, thickh)
+
+#plot_utils.plot_both_Zeus(dORMV, dORMH, vdRij_dqk, hdRij_dqk)
+plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
+
+#orbit = at.find_orbit(ring, refpts= range(len(ring)))
+
+###############################################################################
+#Calculating actual ORM with thick elements and assessing validity
+###############################################################################
+
+#time1 = time.perf_counter()
+###### Example calculating the dORM_dq with thin and thick elements!
+cORM = AnaORM.AnaORM(ring,"v" ,ind_bpm, ind_cor["v"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+cORM.bpm.broadcasters(0, 2)
+cORM.cor.broadcasters(1, 2)
+numORMv = numerical.ORM(ring, "v", ind_bpm, ind_cor["v"])
+anaORMv = cORM.Rab_thick2_(cORM.bpm, cORM.cor)
+##########################################################
+
+###### Example calculating the dORM_dq with thin and thick elements!
+cORM = AnaORM.AnaORM(ring,"h" ,ind_bpm, ind_cor["h"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+cORM.bpm.broadcasters(0, 2)
+cORM.cor.broadcasters(1, 2)
+numORMh = numerical.ORM(ring, "h", ind_bpm, ind_cor["h"])
+anaORMh = cORM.Rab_thick2_(cORM.bpm, cORM.cor)  + cORM.Rab_thick2_disp(cORM.bpm, cORM.cor)
+##########################################################
+
+print(math_utils.normalized_RMSE(numORMv, anaORMv, (0,1)))
+print(math_utils.normalized_RMSE(numORMh, anaORMh, (0,1)))
+ 
 
 
 

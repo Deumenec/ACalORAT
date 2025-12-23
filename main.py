@@ -30,7 +30,7 @@ import matplotlib.pyplot as plt
     
 lattice_file   = 'ring_a2.mat' #Read ALBA II lattice ring_a2.mat or THERING.mat to read the ALBA one
 lattice_folder = 'lattices' #Important quan treballis amb aquests!
-results        = 'A2'  #A1 for the ALBA lattice and A2 for the ALBAII lattice and CFDA2
+results        = 'A2' #A1 for the ALBA lattice and A2 for the ALBAII lattice and CFDA2
 direction      = 'v' #v: vertical h: horizontal (SI NOMÉS ES FA EL CÀLCUL D'UNA)
 step_exp       =  7
 step           =  10**(-step_exp)
@@ -40,12 +40,13 @@ lin_all        =  False  #To turn off higher order multipoles
 max_ind        =  2     #cutoff index in polynomB
 
 
+
 ###############################################################################
 # Reading the lattice parameters
 ###############################################################################
 
 lattice_path = os.path.join(lattice_folder, lattice_file)
-ring, ind_bpm, ind_cor, ind_quad, ind_dip = read.ALBAII(lattice_path)
+ring, ind_bpm, ind_cor, ind_quad, ind_dip, ind_RF = read.ALBAII(lattice_path)
 
 ###############################################################################
 # Configuration of path name for the different options used
@@ -94,19 +95,105 @@ if read_numerical == False:
     numerical_ORM = numerical.dORM_dq(ring, ind_bpm, ind_cor[sub_direction], ind_quad, step, sub_direction)
     np.save(os.path.join(results,prefix + sub_direction+ "_numdORM_dq"),numerical_ORM)
     
-###############################################################################
-# Loading saved numerical dORMs to perform comparisons
-###############################################################################
-    
+
 dORMV = np.load(os.path.join(results,prefix + "v_numdORM_dq.npy"))
 dORMH = np.load(os.path.join(results,prefix + "h_numdORM_dq.npy"))
-original_orbit = at.find_orbit6(ring, refpts=ind_bpm)[1]
-print("hiii")
-(ring[ind_dip[100]]).PolynomB[0]+=0.00000001
-uncorrected_orbit = at.find_orbit6(ring, refpts=ind_bpm)[1]
-correction, final_orbit = numerical.kick_cor(ring , ind_bpm, ind_cor, 0.0000000001, original_orbit)
+
+#aadORM_dCFD =  numerical.dORM_dCFD(ring, ind_bpm, ind_cor["h"], ind_dip, ind_RF, step, "h") #In ALBAII all dipoles are indeed CFD
+
+###############################################################################
+#Calculating dORM with thick elements and assessing validity
+###############################################################################
+
+#time1 = time.perf_counter()
+###### Example calculating the dORM_dq with thin and thick elements!
+cORM = AnaORM.AnaORM(ring,"v" ,ind_bpm, ind_cor["v"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+cORM.quad.correct_strength()
+cORM.bpm.broadcasters(1, 3)
+cORM.cor.broadcasters(2, 3)
+cORM.quad.broadcasters(0, 3)
+thickv = cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad)
+##########################################################
+
+print("hola")
+###### Example calculating the dORM_dq with thin and thick elements!
+cORM = AnaORM.AnaORM(ring,"h" ,ind_bpm, ind_cor["h"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+cORM.dip.correct_entrance()#Corrects optics entrance at dipoles
+#cORM.quad.correct_strength()#Acounts for the fact that 
+cORM.bpm.broadcasters(1, 4)
+cORM.cor.broadcasters(2, 4)
+cORM.quad.broadcasters(0, 4)
+cORM.dip.broadcasters(3, 4)
+
+thickh = np.sum(cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad),axis=3 )+ cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.quad, cORM.dip)
+##########################################################
+#time2 = time.perf_counter()
+#print(time2-time1)
+
+plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
+
+#Dispersion derivative test!!!
+
+ddispana = cORM.dni_dqk(cORM.bpm, cORM.dip, cORM.quad)
+
+def dispersion(ring):
+    all_optics = at.get_optics(ring, refpts = ind_bpm)
+    return np.array([i[0] for i in all_optics[2]["dispersion"]])
+
+###########Dispersion test in bpms######################
+cORM = AnaORM.AnaORM(ring,"h" ,ind_bpm, ind_cor["h"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+cORM.dip.correct_entrance()
+cORM.bpm.broadcasters(0, 2)
+#cORM.dip.correct_entrance()
+cORM.dip.broadcasters(1, 2)
+disp0 = cORM.disp_i(cORM.bpm, cORM.dip)
+########################################################
+
+disp1 = dispersion(ring)
+ring[ind_quad[2]].K += step*1000
+disp2 = dispersion(ring)
+ddisp = (disp1-disp2)/(step*1000)
+
+
+###########Dispersion test in bpms######################
+cORM = AnaORM.AnaORM(ring,"h" ,ind_bpm, ind_cor["h"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+cORM.dip.correct_entrance()
+cORM.bpm.broadcasters(0, 2)
+#cORM.dip.correct_entrance()
+cORM.dip.broadcasters(1, 2)
+disp3 = cORM.disp_i(cORM.bpm, cORM.dip)
+########################################################
+
+ddisp2 = (disp1-disp3)/(step*1000)
+
+
+"""
+###############################################################################
+#Tests regarding kicker response to CFD activation
+###############################################################################
+
+original_orbit = at.find_orbit(ring, refpts=ind_bpm)[1]
+(ring[ind_dip[30]]).PolynomB[0]+=0.00000001
+uncorrected_orbit = at.find_orbit(ring, refpts=ind_bpm)[1]
+correction1, final_orbit1 = numerical.kick_cor(ring , ind_bpm, ind_cor, 0.0000000001, original_orbit)
+
+(ring[ind_dip[30]]).PolynomB[0]-=0.00000002
+#Per aquest mètode sembla bastant beneficios trobar la jacobiana amb punts a tots dos costats de la ORM.
+#Test for the linearity of the response with respect to kickangles
+uncorrected_orbit2 = at.find_orbit(ring, refpts=ind_bpm)[1]
+correction2, final_orbit2 = numerical.kick_cor(ring , ind_bpm, ind_cor, 0.0000000001, original_orbit)
+
 oo= np.array([i[0] for i in original_orbit])
 uo= np.array([i[0] for i in uncorrected_orbit])
-co= np.array([i[0] for i in final_orbit])
-math_utils.listPlot([oo, uo, co], ["original","uncorrected" ,"corrected"],"Kicker Orbit correction", "orbit_correction")
+co1= np.array([i[0] for i in final_orbit1])
+co2= np.array([i[0] for i in final_orbit2])
+
+math_utils.listPlot([oo, uo, co1, co2], ["original","uncorrected" ,"corrected+", "corrected-"],"Kicker Orbit correction", "orbit_correction")
 plt.show()
+"""
+
+

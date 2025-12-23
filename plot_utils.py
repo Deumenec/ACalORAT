@@ -50,17 +50,17 @@ def plot_both_Zeus(ORMv, ORMh, nORMv, nORMh, latex = False):
     if latex == True:
         rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
         rc('text', usetex=True)
-    fig, axis = plt.subplots(1,2,figsize=(10,5))
+    fig, axis = plt.subplots(1,2,figsize=(13,3))
     #fig.suptitle("Errors along quadrupoles for the thin formula ", fontsize = 20)
     fig.subplots_adjust(top=0.85)
     plt.ylabel('dORM/dq normalized_RMSE \%')
 
     axis[0].set_xlabel('Quadrupole')
     axis[1].set_xlabel('Quadrupole')
-    axis[0].title.set_text("Vertical direction, Total = "+f"{vERROR:.4f}\%")
+    axis[0].title.set_text("Vertical direction, Total RMSD = "+f"{vERROR:.4f}\%")
     axis[0].plot(vquadERROR)
 
-    axis[1].title.set_text("Horizontal direction, Total = "+f"{hERROR:.4f}\%")
+    axis[1].title.set_text("Horizontal direction, Total RMSD = "+f"{hERROR:.4f}\%")
     axis[1].plot(hquadERROR)
     plt.savefig("plot.pdf")
     plt.show()

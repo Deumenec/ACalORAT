@@ -63,25 +63,41 @@ def dORM_dq(ring, ind_bpm, ind_cor, ind_quad, step, direction):
     num_dORM_dq = np.array(num_dORM_dq)
     return num_dORM_dq
 
-def compute_single_CFD(ring, CFD, ORM, direction, step, ind_bpm, ind_cor):
-    #Make a deep copy of the ring so threads don't interfere
+def feedback(ring, direction, ind_bpm, ind_cor, ind_RF, closed_orbit):
+    """
+    Applies the feedback corrections in the ring after modifying an element.
+    For ALBA in "Zeus operation mode" activates correctors to reverse the change in closed
+    orbit and modifies the RF to maintain the overall energy of the ring. 
+    """
+    Resp_feedback= at.latticetools.OrbitResponseMatrix(
+        ring,direction, ind_bpm, ind_cor, cavrefs=ind_RF)
+    Resp_feedback.build_tracking()
+    Resp_feedback.correct(ring, apply=True)
+    print("helou")
+    return
+
+def compute_single_CFD(ring, CFD, ORM, direction, step, ind_bpm, ind_cor, ind_RF, closed_orbit):
+    #Make a deep copy of the ring so threads don't interfere 
     local_ring = copy.deepcopy(ring)
 
     #Change the CFD strength (quadrupole and KickAngle)
-    B0 = local_ring[CFD].BendingAngle / local_ring[CFD].Length
+    B0 = local_ring[CFD].BendB / local_ring[CFD].Length
     ratio = B0/local_ring[CFD].PolynomB[1]
-    
     local_ring[CFD].PolynomB[1] += step
     local_ring[CFD].PolynomB[0] += step*ratio
-    #Compute the new ORM
+    
+    #Make the coresponding live-feedback corrections to kickers and RF-freq
+    feedback(ring, direction, ind_bpm, ind_cor, ind_RF, closed_orbit)
+    
+    #Compute the new ORM and this the partial deriative
     Resp_local = at.latticetools.OrbitResponseMatrix(
         local_ring, direction, ind_bpm, ind_cor)
     
     Resp_local.build_tracking()
-
+    
     return (Resp_local.response - ORM) / step
 
-def dORM_dCFD(ring, ind_bpm, ind_cor, ind_CFD, step, direction):
+def dORM_dCFD(ring, ind_bpm, ind_cor, ind_CFD, ind_RF, step, direction):
     """
     Parameters
     ----------
@@ -101,13 +117,17 @@ def dORM_dCFD(ring, ind_bpm, ind_cor, ind_CFD, step, direction):
         The dORM_dq rank 3 tensor with indices dORM_dq[quadrupole][bpm][corrector]
     """
     num_dORM_dq = np.zeros([len(ind_CFD), len(ind_bpm), len(ind_cor)])
+    closed_orbit = at.find_orbit(ring, refpts=range(len(ring)))[1] #Compute the closed orbit along all elements in the ring
     Resp = at.latticetools.OrbitResponseMatrix(ring,direction, ind_bpm, ind_cor) #class for computing the ORM
     Resp.build_tracking()
     ORM = Resp.response
-    
+    for i, CFD in enumerate(ind_CFD):
+        num_dORM_dq[i] = compute_single_CFD(ring, CFD, ORM, direction, step, ind_bpm, ind_cor, ind_RF, closed_orbit)
+    """
     num_dORM_dq = Parallel(n_jobs=-1, verbose=10)(
-        delayed(compute_single_CFD) (ring, CFD, ORM, direction, step, ind_bpm, ind_cor) for CFD in ind_CFD)
+        delayed(compute_single_CFD) (ring, CFD, ORM, direction, step, ind_bpm, ind_cor, ind_RF, closed_orbit) for CFD in ind_CFD)
     num_dORM_dq = np.array(num_dORM_dq)
+    """
     return num_dORM_dq
 
 def applyKick(ring, ind_cor, kicks, direction):
@@ -120,6 +140,7 @@ def applyKick(ring, ind_cor, kicks, direction):
     return
 
 def rms(vec):
+    """Calculates the RMS of a given vector."""
     return np.sqrt(np.sum(vec*vec))
     
 def kick_cor(ring , ind_bpm, ind_cor, threshold, original_orbit):
@@ -135,10 +156,9 @@ def kick_cor(ring , ind_bpm, ind_cor, threshold, original_orbit):
     dxs = np.array([orbit[i][0] -original_orbit[i][0] for i in range(len(orbit))])
     dys = np.array([orbit[i][2] -original_orbit[i][2] for i in range(len(orbit))])
     difference = rms(dxs)+rms(dys)
-    print(difference)
     if difference<threshold:
         print("No correction was needed")
-        return t_kicks
+        return t_kicks, orbit #The original one as expected
     
     while max_steps >1:
         max_steps -=1
@@ -167,6 +187,14 @@ def kick_cor(ring , ind_bpm, ind_cor, threshold, original_orbit):
         difference = rms(dxs)+rms(dys)
         print(difference)
         if difference<threshold:
-            #TODO: restore the ring after changing the kickangles or using a deep-copy of the ring for this method
+            #Restore the ring after changing the kickangles
+            applyKick(ring, ind_cor["h"],  -t_kicks["h"], "h")
+            applyKick(ring, ind_cor["v"], -t_kicks["v"], "v")
             return t_kicks, orbit
     print("Iteration did not converge")
+    applyKick(ring, ind_cor["h"],  -t_kicks["h"], "h")
+    applyKick(ring, ind_cor["v"], -t_kicks["v"], "v")
+    return t_kicks, orbit
+
+
+    

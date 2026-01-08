@@ -94,7 +94,8 @@ if read_numerical == False:
     for ind in ind_cor[sub_direction]: ring[ind].KickAngle = np.array([0,0])
     numerical_ORM = numerical.dORM_dq(ring, ind_bpm, ind_cor[sub_direction], ind_quad, step, sub_direction)
     np.save(os.path.join(results,prefix + sub_direction+ "_numdORM_dq"),numerical_ORM)
-    
+
+"""
 
 dORMV = np.load(os.path.join(results,prefix + "v_numdORM_dq.npy"))
 dORMH = np.load(os.path.join(results,prefix + "h_numdORM_dq.npy"))
@@ -116,7 +117,6 @@ cORM.quad.broadcasters(0, 3)
 thickv = cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad)
 ##########################################################
 
-print("hola")
 ###### Example calculating the dORM_dq with thin and thick elements!
 cORM = AnaORM.AnaORM(ring,"h" ,ind_bpm, ind_cor["h"], ind_quad, ind_dip, np.array([]))
 cORM.assign_optics()
@@ -127,51 +127,38 @@ cORM.cor.broadcasters(2, 4)
 cORM.quad.broadcasters(0, 4)
 cORM.dip.broadcasters(3, 4)
 
-thickh = np.sum(cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad),axis=3 )+ cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.quad, cORM.dip)
+thickh = np.sum(cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad),axis=3 ) #+ cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.quad, cORM.dip)
 ##########################################################
 #time2 = time.perf_counter()
 #print(time2-time1)
 
-plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
+#plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
+
+"""
 
 #Dispersion derivative test!!!
 
-ddispana = cORM.dni_dqk(cORM.bpm, cORM.dip, cORM.quad)
 
 def dispersion(ring):
+    """Calculates dispersion in bpms """
     all_optics = at.get_optics(ring, refpts = ind_bpm)
     return np.array([i[0] for i in all_optics[2]["dispersion"]])
 
 ###########Dispersion test in bpms######################
 cORM = AnaORM.AnaORM(ring,"h" ,ind_bpm, ind_cor["h"], ind_quad, ind_dip, np.array([]))
 cORM.assign_optics()
-cORM.dip.correct_entrance()
+#cORM.dip.correct_entrance() #Already correcting for the hef
 cORM.bpm.broadcasters(0, 2)
-#cORM.dip.correct_entrance()
 cORM.dip.broadcasters(1, 2)
-disp0 = cORM.disp_i(cORM.bpm, cORM.dip)
+disp0 = cORM.ni_sum(cORM.bpm, cORM.dip)
+dispReal = dispersion(ring)
 ########################################################
 
-disp1 = dispersion(ring)
-ring[ind_quad[2]].K += step*1000
-disp2 = dispersion(ring)
-ddisp = (disp1-disp2)/(step*1000)
-
-
-###########Dispersion test in bpms######################
-cORM = AnaORM.AnaORM(ring,"h" ,ind_bpm, ind_cor["h"], ind_quad, ind_dip, np.array([]))
-cORM.assign_optics()
-cORM.dip.correct_entrance()
-cORM.bpm.broadcasters(0, 2)
-#cORM.dip.correct_entrance()
-cORM.dip.broadcasters(1, 2)
-disp3 = cORM.disp_i(cORM.bpm, cORM.dip)
-########################################################
-
-ddisp2 = (disp1-disp3)/(step*1000)
-
+plt.plot(disp0)
+plt.plot(dispReal)
 
 """
+
 ###############################################################################
 #Tests regarding kicker response to CFD activation
 ###############################################################################

@@ -38,9 +38,13 @@ read_numerical =  True
 dispersion     =  True  #Important ja que sino tot petaria amb la cromaticitat! calcular les matrius amb dispersió.
 lin_all        =  False  #To turn off higher order multipoles
 max_ind        =  2     #cutoff index in polynomB
+RF_corr        =  False
+calc_dq        =  False
+calc_dCFD      =  True
 
-
-
+if RF_corr:
+    results += "RFs"
+    
 ###############################################################################
 # Reading the lattice parameters
 ###############################################################################
@@ -79,28 +83,52 @@ if lin_all == True: #DESACTIVA TOTS ELS Sextupols i ordres superiors
 
 for ind in ind_cor["h"]: ring[ind].KickAngle = np.array([0,0])
 for ind in ind_cor["v"]: ring[ind].KickAngle = np.array([0,0])
+
 ###############################################################################
-# Calculating the numerical dORMdCFD if required and saving them
+# Calculating the numerical dORMdq if required and saving them
 ###############################################################################
 
 if read_numerical == False:
     #I add kick angle variable to perform the numerical ORM calculation
     #IMPORTANT, add ind_cor[sub_direction] for ALBA2
-    sub_direction = "v"
-    numerical_ORM = numerical.dORM_dq(ring, ind_bpm, ind_cor[sub_direction], ind_quad, step, sub_direction)
-    np.save(os.path.join(results,prefix + sub_direction+ "_numdORM_dq"),numerical_ORM)
-    #The other direction
-    sub_direction = "h"
-    for ind in ind_cor[sub_direction]: ring[ind].KickAngle = np.array([0,0])
-    numerical_ORM = numerical.dORM_dq(ring, ind_bpm, ind_cor[sub_direction], ind_quad, step, sub_direction)
-    np.save(os.path.join(results,prefix + sub_direction+ "_numdORM_dq"),numerical_ORM)
+    if calc_dq:
+        numerical_ORM = numerical.dORM_dq(ring, ind_bpm, ind_cor["v"], ind_quad, step, "v")
+        np.save(os.path.join(results,prefix +"v_numdORM_dq"),numerical_ORM)
+        for ind in ind_cor["h"]: ring[ind].KickAngle = np.array([0,0])
+        numerical_ORM = numerical.dORM_dq(ring, ind_bpm, ind_cor["h"], ind_quad, step, "h")
+        np.save(os.path.join(results,prefix + "h_numdORM_dq"),numerical_ORM)
+    if calc_dCFD:
+        #ALSO I calculate responses for CFD
+        #numerical_ORM = numerical.dORM_dCFD(ring, ind_bpm, ind_cor["v"], ind_quad, step, "v")
+        #np.save(os.path.join(results,prefix +"v_numdORM_dCFD"),numerical_ORM)
+        time1 = time.perf_counter()
+        Resp = at.latticetools.OrbitResponseMatrix(ring,direction, ind_bpm, ind_cor["h"]) #class for computing the ORM in the original direction
+        print(time.perf_counter()-time1)
+        time1 = time.perf_counter()
+        
+        ORMaaa = Resp.build_tracking()
 
-"""
+        print(time.perf_counter()-time1)
+        time1 = time.perf_counter()
+        
+        ORM = Resp.response
+
+        print(time.perf_counter()-time1)
+        time1 = time.perf_counter()
+        
+        #numerical_ORM = numerical.dORM_dCFD(ring, ind_bpm, ind_cor, ind_dip, ind_RF, step, "h") #Uses the dips, which assumes are in general CFD
+        #np.save(os.path.join(results,prefix +"h_numdORM_dCFD"),numerical_ORM)
+
+numerical.dORM_dCFD(ring, ind_bpm, ind_cor, ind_dip, ind_RF, step, direction) #In ALBAII all dipoles are CFD!
+    
 
 dORMV = np.load(os.path.join(results,prefix + "v_numdORM_dq.npy"))
 dORMH = np.load(os.path.join(results,prefix + "h_numdORM_dq.npy"))
 
-#aadORM_dCFD =  numerical.dORM_dCFD(ring, ind_bpm, ind_cor["h"], ind_dip, ind_RF, step, "h") #In ALBAII all dipoles are indeed CFD
+#dORMH_CFD = np.load(os.path.join(results,prefix + "h_numdORM_dCFD.npy"))
+
+#dORM_dCFD =  numerical.dORM_dCFD(ring, ind_bpm, ind_cor["h"], ind_dip, ind_RF, step, "h") #In ALBAII all dipoles are indeed CFD
+
 
 ###############################################################################
 #Calculating dORM with thick elements and assessing validity
@@ -127,27 +155,27 @@ cORM.cor.broadcasters(2, 4)
 cORM.quad.broadcasters(0, 4)
 cORM.dip.broadcasters(3, 4)
 
-thickh = np.sum(cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad),axis=3 ) #+ cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.quad, cORM.dip)
+thickh = np.sum(cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad),axis=3 ) + cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.quad, cORM.dip)
 ##########################################################
 #time2 = time.perf_counter()
 #print(time2-time1)
 
 #plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
 
-"""
+
 
 #Dispersion derivative test!!!
 
 
 def dispersion(ring):
-    """Calculates dispersion in bpms """
+    #Calculates dispersion in bpms
     all_optics = at.get_optics(ring, refpts = ind_bpm)
     return np.array([i[0] for i in all_optics[2]["dispersion"]])
 
 ###########Dispersion test in bpms######################
 cORM = AnaORM.AnaORM(ring,"h" ,ind_bpm, ind_cor["h"], ind_quad, ind_dip, np.array([]))
 cORM.assign_optics()
-#cORM.dip.correct_entrance() #Already correcting for the hef
+cORM.dip.correct_entrance() #Already correcting for the hef
 cORM.bpm.broadcasters(0, 2)
 cORM.dip.broadcasters(1, 2)
 disp0 = cORM.ni_sum(cORM.bpm, cORM.dip)
@@ -157,8 +185,9 @@ dispReal = dispersion(ring)
 plt.plot(disp0)
 plt.plot(dispReal)
 
-"""
 
+
+"""
 ###############################################################################
 #Tests regarding kicker response to CFD activation
 ###############################################################################

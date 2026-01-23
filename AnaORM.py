@@ -21,13 +21,7 @@ def broadcast_vector(v, axis, ndim):
     shape[axis] = -1            # -1 lets reshape infer v's length
     return v.reshape(shape)
 
-def mcf(ring):
-    if (ring.is_6d==True):
-        ring.disable_6d()
-        mcf = ring.mcf
-        ring.enable_6d()
-        return mcf
-    return ring.mcf
+
     
 class Elements:
     """Group of elements of a certain type bpms, correctors, dipoles, or 
@@ -213,7 +207,7 @@ class AnaORM:
 
     def Ijc1_L(self, Ej: Elements):
         """Integral term for elements WITH quadrupole moment inside divided by the length of the element"""
-        return np.real(np.sin(np.sin(np.sqrt(Ej.KB)*Ej.LengthB))/(Ej.LengthB*np.sqrt(Ej.KB)) + Ej.alphaB*(np.cos(np.sqrt(Ej.KB)*Ej.Length)-1)/(Ej.KB*Ej.betaB*Ej.LengthB))
+        return np.real(np.sin(np.sqrt(Ej.KB)*Ej.LengthB)/(Ej.LengthB*np.sqrt(Ej.KB)) + Ej.alphaB*(np.cos(np.sqrt(Ej.KB)*Ej.Length)-1)/(Ej.KB*Ej.betaB*Ej.LengthB))
         
     def Ijs1_L(self, Ej: Elements):
         """Integral term for elements WITH quadrupole moment inside divided by the length of the elmeent"""
@@ -374,85 +368,6 @@ class AnaORM:
          * (Ijc1 * dRij_terms + Ijs1 * dTij_terms))
         return np.sum(dni_dqk, axis = Ej._bAxis)
         
-    def dni_dqk(self, Ei: Elements, Ej: Elements, Ek: Elements):
-        #TODO: intent de calcular la dispersió que funciona per ALBA però no per ALBAII
-        """
-        Calculates the EXACT derivative of dispersion at Ei (BPMs) with respect 
-        to THICK Quadrupoles Ek.
-        
-        feed-down kick (-DeltaK * eta(s)) integrated over the quadrupole.
-        
-        Ei: BPMs
-        Ej: Dipoles (Used to get initial dispersion at quad entrance)
-        Ek: Quadrupoles
-        """
-        
-        # --- 1. Constants and Pre-calculation ---
-        # Get strength and length. Handle broadcasting.
-        # We ensure sqrt(K) is complex-safe (though K>0 for focusing)
-        rootK = np.sqrt(Ek.KB) 
-        L = Ek.LengthB
-        
-        # --- 2. The Interaction Integrals (J terms) ---
-        # These are the analytic integrals of products of sin/cos over the quad length
-        # J_cc = Integral[ cos^2(ks) ]
-        # J_ss = Integral[ sin^2(ks) ]
-        # J_cs = Integral[ cos(ks)sin(ks) ]
-        
-        sin2KL = np.sin(2 * rootK * L)
-        cos2KL = np.cos(2 * rootK * L)
-        
-        J_cc = L/2.0 + sin2KL / (4.0 * rootK)
-        J_ss = L/2.0 - sin2KL / (4.0 * rootK)
-        J_cs = (1.0 - cos2KL) / (4.0 * rootK)
-        
-        # --- 3. Construct Dispersion terms inside the Quad ---
-        # Dispersion at any point s inside is: 
-        # eta(s) = eta_0 * cos(ks) + eta'_0/k * sin(ks)
-        # We need the dispersion at the ENTRANCE of the quadrupole (Ek)
-        # We calculate it using your existing disp_i function (summing dipoles Ej)
-        
-        # Important: disp_i returns dispersion at the element. 
-        # We need to make sure dimensions align for broadcasting.
-        # This calculates eta at Ek from dipoles Ej.
-        eta_ent  = Ek.dispersionB
-        
-        # We also need eta_prime (slope) at entrance. 
-        # Approx: eta_prime ~ (eta_next - eta_prev)/L or via transfer map.
-        # For high precision, we should calculate eta' explicitly. 
-        # If Ek.dispersionpB is available and accurate (from AT optics), use it:
-        etap_ent = Ek.dispersionpB # This comes from the AT optics at entrance
-        
-        # These are the weighted sums of the dispersion over the element
-        # Int_C = Integral[ eta(s) * cos(ks) ]
-        # Int_S = Integral[ eta(s) * sin(ks) ]
-        Int_C = eta_ent * J_cc + (etap_ent / rootK) * J_cs
-        Int_S = eta_ent * J_cs + (etap_ent / rootK) * J_ss
-        
-        
-        # --- 4. Propagate to BPMs (Green's Function) ---
-        # The Green's function from a point 's' inside the quad to BPM 'i':
-        # G(i,s) = sqrt(beta_i)/(2 sin pi nu) * [ sqrt(beta(s))*cos(mu_i - mu(s) - pi nu) ]
-        
-        # Expanding the cosine term involves optics at the entrance of the quad (Ek).
-
-        Cik1 = self.Cabn(Ei, Ek, 1) 
-        Sik1 = self.Sabn(Ei, Ek, 1)
-        
-        # Constant pre-factor for Orbit Response
-        # Note: sin(pi*tune), NOT sin(2*pi*tune)
-        prefactor = np.sqrt(Ei.betaB * Ek.betaB) / (2 * np.sin(np.pi * self.tune))
-        
-        # Where I_kc_eff and I_ks_eff are the projections of dispersion onto the response basis.
-        # Based on standard thick element integration:
-        
-        I_kc_eff = Int_C - (Ek.alphaB / Ek.betaB) * (1/rootK) * Int_S
-        I_ks_eff = (1 / (rootK * Ek.betaB)) * Int_S
-        
-        # Final Result
-        # dEta/dK = -1 * Integral
-        dni = -1.0 * prefactor * (Cik1 * I_kc_eff + Sik1 * I_ks_eff)
-        return dni
 
     def dRij_dqk_thick23_disp(self, Ei : Elements, Ej : Elements, Ek : Elements, El : Elements):
         """Computes the dRij_dqk dispersion term, which is relevant in the HORIZONTAL
@@ -487,25 +402,25 @@ class AnaORM:
         Kicker_term = 1 
         Energy_offset_term = 1 
         return CFD_term+Kicker_term+Energy_offset_term
+    
     def Rij_disp_term(self, Ei : Elements, Ej : Elements, Ed : Elements):
-        """Computes the dispersion term by dispersion originated in the dipoles
-        """
-        return 0
         """Calculates the dispersion caused at the entrance of the ith element
         caused by the El dipoles
+        #TODO: sure?
         """
-        Ilc1 = self.Ikc1(El)
-        Ils1 = self.Iks1(El)
+        Ilc1 = self.Ikc1(Ed)
+        Ils1 = self.Iks1(Ed)
         
-        Cil1 = self.Cabn(Ei, El, 1)
-        Sil1 = self.Sabn(Ei, El, 1)
+        Cil1 = self.Cabn(Ei, Ed, 1)
+        Sil1 = self.Sabn(Ei, Ed, 1)
         
-        return np.sum(np.sqrt(Ei.betaB)/(2*np.sin(np.pi*self.tune))*El.BendB/El.LengthB * (Ilc1*Cil1+Ils1*Sil1), axis = El._bAxis)
+        return np.sum(np.sqrt(Ei.betaB)/(2*np.sin(np.pi*self.tune))*Ed.BendB/Ed.LengthB * (Ilc1*Cil1+Ils1*Sil1), axis = Ed._bAxis)
     
     def Rij_FD_term():
         """Future, to calculate the ORM better, using the derivative of the MCF
         """
-        return 
+        a=0
+        return a
     def aMCF(self, Em: Elements,En: Elements):
         """Calculates the mcf for a ring due to dipoles
         Diples in the first and second component analytically

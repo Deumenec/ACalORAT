@@ -10,6 +10,17 @@ import at
 import copy
 import numpy as np
 from joblib import Parallel, delayed
+import tqdm
+
+dir_dict = {"h": 0, "v": 1}
+
+def get_mcf(ring):
+    if (ring.is_6d==True):
+        ring.disable_6d()
+        mcf = ring.mcf
+        ring.enable_6d()
+        return mcf
+    return ring.mcf
 
 def ORM(ring, direction, ind_bpm, ind_cor):
     """ ORM numerically to check if the corrections we want to apply are worthwile!
@@ -63,33 +74,175 @@ def dORM_dq(ring, ind_bpm, ind_cor, ind_quad, step, direction):
     num_dORM_dq = np.array(num_dORM_dq)
     return num_dORM_dq
 
-def feedback(ring, direction, ind_bpm, ind_cor, ind_RF, closed_orbit):
+
+def applyCorrections(ring, ind_cor, kicks, direction):
+    """Given a vector of changes in correctors, they are applyied to a ring 
     """
-    Applies the feedback corrections in the ring after modifying an element.
-    For ALBA in "Zeus operation mode" activates correctors to reverse the change in closed
-    orbit and modifies the RF to maintain the overall energy of the ring. 
-    """
-    Resp_feedback= at.latticetools.OrbitResponseMatrix(
-        ring,direction, ind_bpm, ind_cor, cavrefs=ind_RF)
-    Resp_feedback.build_tracking()
-    Resp_feedback.correct(ring, apply=True)
-    print("helou")
+    dir_dict = {"h": 0, "v": 1}
+    dir_ind = dir_dict[direction]
+    for i, cor in enumerate(ind_cor):
+        ((ring[cor]).KickAngle)[dir_ind] += kicks[i] 
     return
 
-def compute_single_CFD(ring, CFD, ORM, direction, step, ind_bpm, ind_cor, ind_RF, closed_orbit):
-    #Make a deep copy of the ring so threads don't interfere 
-    local_ring = copy.deepcopy(ring)
+def rms(vec):
+    """Calculates the RMS of a given vector."""
+    return np.sqrt(np.sum(vec*vec))
+    
+def kick_cor(ring , ind_bpm, ind_cor, threshold, original_orbit):
+    """
+    Tweek corrector kickangles to minimize errors at bpms with l2 norm matching
+    the ring orbit with the original one, it does not apply any energy correction
+    """
+    max_steps = 4
+    
+    #Total kicks performed
+    t_kicks = {"h":np.zeros(len(ind_cor["h"])), "v": np.zeros(len(ind_cor["v"]))}
+    
+    #Kicks for current iteration
+    kicks = {"h":np.zeros(len(ind_cor["h"])), "v": np.zeros(len(ind_cor["v"]))}
+    
+    #Finds orbit at the beginig
+    orbit = at.find_orbit6(ring, refpts=ind_bpm)[1]
+    dxs = np.array([orbit[i][0] -original_orbit[i][0] for i in range(len(orbit))])
+    dys = np.array([orbit[i][2] -original_orbit[i][2] for i in range(len(orbit))])
+    difference = rms(dxs)+rms(dys)
+    if difference<threshold:
+        #print("No correction was needed")
+        return t_kicks, orbit 
+    
+    while max_steps >1:
+        
+        max_steps -=1
+        Resp = at.latticetools.OrbitResponseMatrix(ring,"h", ind_bpm, ind_cor["h"])
+        Resp.build_tracking()
+        ORMH = Resp.response
+        Resp = at.latticetools.OrbitResponseMatrix(ring,"v", ind_bpm, ind_cor["v"])
+        Resp.build_tracking()
+        ORMV = Resp.response
+        
+        #Numerically inverse the ORM
+        kicks["h"], *_ =np.linalg.lstsq(ORMH, dxs)
+        kicks["v"], *_ =np.linalg.lstsq(ORMV, dys)
+        
+        #Aplico com el kick contrari al que està causant el desplaçament observat per corregir-lo
+        kicks["h"] = -kicks["h"]
+        kicks["v"] = -kicks["v"]
+        
+        t_kicks["h"] = t_kicks["h"]+kicks["h"]
+        t_kicks["v"] = t_kicks["v"]+kicks["v"]
+        
+        applyCorrections(ring, ind_cor["h"], kicks["h"], "h")
+        applyCorrections(ring, ind_cor["v"], kicks["v"], "v")
+        
+        orbit = at.find_orbit6(ring, refpts=ind_bpm)[1]
+        dxs = np.array([orbit[i][0] -original_orbit[i][0] for i in range(len(orbit))])
+        dys = np.array([orbit[i][2] -original_orbit[i][2] for i in range(len(orbit))])
+        
+        difference = rms(dxs)+rms(dys)
+        #print(difference)
+        if difference<threshold:
+            #Restore the ring after changing the kickangles
+            applyCorrections(ring, ind_cor["h"],  -t_kicks["h"], "h")
+            applyCorrections(ring, ind_cor["v"], -t_kicks["v"], "v")
+            return t_kicks, orbit
+        
+    #print("Iteration did not converge")
+    applyCorrections(ring, ind_cor["h"],  -t_kicks["h"], "h")
+    applyCorrections(ring, ind_cor["v"], -t_kicks["v"], "v")
+    return t_kicks, orbit
 
-    #Change the CFD strength (quadrupole and KickAngle)
-    B0 = local_ring[CFD].BendB / local_ring[CFD].Length
+def kick_RF_cor(ring , ind_bpm, ind_cor, threshold, original_orbit, dispersion):
+    """
+    Uses SVD to correct in bpms using kickers. Afterwards, it changes the RF frequency
+    To make the sum of the kicks applyed be zero.
+    At least two iterations are needed for the method to work
+    """
+    #Hardcoded 
+    max_steps = 4
+    
+    #Total kicks performed
+    t_kicks = {"h":np.zeros(len(ind_cor["h"])), "v": np.zeros(len(ind_cor["v"]))}
+    
+    #Kicks for current iteration
+    kicks = {"h":np.zeros(len(ind_cor["h"])), "v": np.zeros(len(ind_cor["v"]))}
+    
+    #Finds orbit at the beginig
+    orbit = at.find_orbit6(ring, refpts=ind_bpm)[1]
+    dxs = np.array([orbit[i][0] -original_orbit[i][0] for i in range(len(orbit))])
+    dys = np.array([orbit[i][2] -original_orbit[i][2] for i in range(len(orbit))])
+    difference = rms(dxs)+rms(dys)
+    if difference<threshold:
+        print("No correction was needed")
+        return t_kicks, orbit #The original one as expected
+    
+    while max_steps >1:
+        max_steps -=1
+        Resp = at.latticetools.OrbitResponseMatrix(ring,"h", ind_bpm, ind_cor["h"])
+        Resp.build_tracking()
+        ORMH = Resp.response + [dispersion["h"][ind_bpm]]
+        Resp = at.latticetools.OrbitResponseMatrix(ring,"v", ind_bpm, ind_cor["v"])
+        Resp.build_tracking()
+        ORMV = Resp.response + [dispersion["h"][ind_bpm]]
+        #Numerically inverse the ORM
+        kicks["h"], *_ =np.linalg.lstsq(ORMH, dxs)
+        kicks["v"], *_ =np.linalg.lstsq(ORMV, dys)
+        #Aplico com el kick contrari al que està causant el desplaçament observat per corregir-lo
+        kicks["h"] = -kicks["h"]
+        kicks["v"] = -kicks["v"]
+        
+        t_kicks["h"] = t_kicks["h"]+kicks["h"]
+        t_kicks["v"] = t_kicks["v"]+kicks["v"]
+        
+        applyCorrections(ring, ind_cor["h"], kicks["h"], "h")
+        applyCorrections(ring, ind_cor["v"], kicks["v"], "v")
+        
+        #After applying the correction for the correctors, it does the RF correction
+        #With the simple formula I deduced:
+        
+        sum_kicks= np.sum(kicks["h"])
+        ring_freq = ring.get_rf_frequency()
+        mcf       = get_mcf(ring)
+        quotient, *_ =np.linalg.lstsq(ORMH, dispersion["h"])
+        
+        d_ring_freq = -sum_kicks*mcf*ring_freq/np.sum(quotient)
+        
+        ring.set_rf_frequency(ring, ring_freq+d_ring_freq)
+        
+        orbit = at.find_orbit6(ring, refpts=ind_bpm)[1]
+        dxs = np.array([orbit[i][0] -original_orbit[i][0] for i in range(len(orbit))])
+        dys = np.array([orbit[i][2] -original_orbit[i][2] for i in range(len(orbit))])
+        
+        difference = rms(dxs)+rms(dys)
+        #print(difference)
+        if difference<threshold:
+            #Restore the ring after changing the kickangles
+            applyCorrections(ring, ind_cor["h"],  -t_kicks["h"], "h")
+            applyCorrections(ring, ind_cor["v"], -t_kicks["v"], "v")
+            return t_kicks, orbit
+        
+    print("Iteration did not converge")
+    applyCorrections(ring, ind_cor["h"],  -t_kicks["h"], "h")
+    applyCorrections(ring, ind_cor["v"], -t_kicks["v"], "v")
+    return t_kicks, orbit
+
+
+def compute_single_CFD(ring, CFD, ORM, direction, step, ind_bpm, ind_cor, closed_orbit, dispersion):
+    #Make a deep copy of the ring
+    local_ring = copy.deepcopy(ring)
+    #Change the CFD strength ratio(quadrupole and KickAngle)
+    B0 = local_ring[CFD].BendingAngle/ local_ring[CFD].Length
     ratio = B0/local_ring[CFD].PolynomB[1]
+    
+    #Activating the CFD
     local_ring[CFD].PolynomB[1] += step
     local_ring[CFD].PolynomB[0] += step*ratio
     
     #Make the coresponding live-feedback corrections to kickers and RF-freq
-    feedback(ring, direction, ind_bpm, ind_cor, ind_RF, closed_orbit)
+    diff = 1
+    while diff >= 1e-9:
+        kick_RF_cor(ring , ind_bpm, ind_cor, 1e-9, closed_orbit, dispersion)
     
-    #Compute the new ORM and this the partial deriative
+    #Compute the new ORM and this partial deriative
     Resp_local = at.latticetools.OrbitResponseMatrix(
         local_ring, direction, ind_bpm, ind_cor)
     
@@ -116,85 +269,27 @@ def dORM_dCFD(ring, ind_bpm, ind_cor, ind_CFD, ind_RF, step, direction):
     num_dORM_dq: np.array 
         The dORM_dq rank 3 tensor with indices dORM_dq[quadrupole][bpm][corrector]
     """
+
     num_dORM_dq = np.zeros([len(ind_CFD), len(ind_bpm), len(ind_cor)])
     closed_orbit = at.find_orbit(ring, refpts=range(len(ring)))[1] #Compute the closed orbit along all elements in the ring
-    Resp = at.latticetools.OrbitResponseMatrix(ring,direction, ind_bpm, ind_cor) #class for computing the ORM
-    Resp.build_tracking()
-    ORM = Resp.response
-    for i, CFD in enumerate(ind_CFD):
-        num_dORM_dq[i] = compute_single_CFD(ring, CFD, ORM, direction, step, ind_bpm, ind_cor, ind_RF, closed_orbit)
+
+    optics = at.get_optics(ring, refpts=range(len(ring)))[2]
+    dispersion = {"h": np.array( [ optics["dispersion"][i][0] for i in range(len(ring)) ] ),
+                  "v": np.array( [ optics["dispersion"][i][2] for i in range(len(ring)) ] )}
+    
+    Resp = at.latticetools.OrbitResponseMatrix(ring,direction, ind_bpm, ind_cor[direction]) #class for computing the ORM in the original direction
+    print("hii")
+    ORM = Resp.build_tracking()
+    for i, CFD in enumerate(ind_CFD[:5]):
+        print(i)
+        num_dORM_dq[i] = compute_single_CFD(ring, CFD, ORM, direction, step, ind_bpm, ind_cor, closed_orbit, dispersion)
     """
     num_dORM_dq = Parallel(n_jobs=-1, verbose=10)(
-        delayed(compute_single_CFD) (ring, CFD, ORM, direction, step, ind_bpm, ind_cor, ind_RF, closed_orbit) for CFD in ind_CFD)
+        delayed(compute_single_CFD) (ring, CFD, ORM, direction, step, ind_bpm, ind_cor, closed_orbit) for CFD in ind_CFD)
     num_dORM_dq = np.array(num_dORM_dq)
     """
     return num_dORM_dq
 
-def applyKick(ring, ind_cor, kicks, direction):
-    """Given a vector of changes in correctors, they are applyied to a ring 
-    """
-    dir_dict = {"h": 0, "v": 1}
-    dir_ind = dir_dict[direction]
-    for i, cor in enumerate(ind_cor):
-        ((ring[cor]).KickAngle)[dir_ind] += kicks[i] 
-    return
-
-def rms(vec):
-    """Calculates the RMS of a given vector."""
-    return np.sqrt(np.sum(vec*vec))
-    
-def kick_cor(ring , ind_bpm, ind_cor, threshold, original_orbit):
-    """
-    Tweek corrector kickangles to minimize errors at bpms with l2 norm below the threshhold
-    #TODO: Implement this process as well using the analytical formulas for the ORM
-    """
-    max_steps = 3
-    t_kicks = {"h":np.zeros(len(ind_cor["h"])), "v": np.zeros(len(ind_cor["v"]))}
-    kicks = {"h":np.zeros(len(ind_cor["h"])), "v": np.zeros(len(ind_cor["v"]))}
-    #Finds orbit at the beginig
-    orbit = at.find_orbit6(ring, refpts=ind_bpm)[1]
-    dxs = np.array([orbit[i][0] -original_orbit[i][0] for i in range(len(orbit))])
-    dys = np.array([orbit[i][2] -original_orbit[i][2] for i in range(len(orbit))])
-    difference = rms(dxs)+rms(dys)
-    if difference<threshold:
-        print("No correction was needed")
-        return t_kicks, orbit #The original one as expected
-    
-    while max_steps >1:
-        max_steps -=1
-        Resp = at.latticetools.OrbitResponseMatrix(ring,"h", ind_bpm, ind_cor["h"])
-        Resp.build_tracking()
-        ORMH = Resp.response
-        Resp = at.latticetools.OrbitResponseMatrix(ring,"v", ind_bpm, ind_cor["v"])
-        Resp.build_tracking()
-        ORMV = Resp.response
-        
-        kicks["h"], *_ =np.linalg.lstsq(ORMH, dxs)
-        kicks["v"], *_ =np.linalg.lstsq(ORMV, dys)
-        #Aplico com el kick contrari al que està causant el desplaçament observat
-        kicks["h"] = -kicks["h"]
-        kicks["v"] = -kicks["v"]
-        
-        t_kicks["h"] = t_kicks["h"]+kicks["h"]
-        t_kicks["v"] = t_kicks["v"]+kicks["v"]
-        
-        applyKick(ring, ind_cor["h"], kicks["h"], "h")
-        applyKick(ring, ind_cor["v"], kicks["v"], "v")
-        orbit = at.find_orbit6(ring, refpts=ind_bpm)[1]
-        dxs = np.array([orbit[i][0] -original_orbit[i][0] for i in range(len(orbit))])
-        dys = np.array([orbit[i][2] -original_orbit[i][2] for i in range(len(orbit))])
-        
-        difference = rms(dxs)+rms(dys)
-        print(difference)
-        if difference<threshold:
-            #Restore the ring after changing the kickangles
-            applyKick(ring, ind_cor["h"],  -t_kicks["h"], "h")
-            applyKick(ring, ind_cor["v"], -t_kicks["v"], "v")
-            return t_kicks, orbit
-    print("Iteration did not converge")
-    applyKick(ring, ind_cor["h"],  -t_kicks["h"], "h")
-    applyKick(ring, ind_cor["v"], -t_kicks["v"], "v")
-    return t_kicks, orbit
 
 
     

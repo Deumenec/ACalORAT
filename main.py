@@ -98,29 +98,10 @@ if read_numerical == False:
         numerical_ORM = numerical.dORM_dq(ring, ind_bpm, ind_cor["h"], ind_quad, step, "h")
         np.save(os.path.join(results,prefix + "h_numdORM_dq"),numerical_ORM)
     if calc_dCFD:
-        #ALSO I calculate responses for CFD
-        #numerical_ORM = numerical.dORM_dCFD(ring, ind_bpm, ind_cor["v"], ind_quad, step, "v")
-        #np.save(os.path.join(results,prefix +"v_numdORM_dCFD"),numerical_ORM)
-        time1 = time.perf_counter()
-        Resp = at.latticetools.OrbitResponseMatrix(ring,direction, ind_bpm, ind_cor["h"]) #class for computing the ORM in the original direction
-        print(time.perf_counter()-time1)
-        time1 = time.perf_counter()
-        
-        ORMaaa = Resp.build_tracking()
+        a=0
 
-        print(time.perf_counter()-time1)
-        time1 = time.perf_counter()
-        
-        ORM = Resp.response
+h_numerical_dORM_dCFD = numerical.dORM_dCFD(ring, ind_bpm, ind_cor, ind_dip, ind_RF, step, "h", num = 5) #In ALBAII all dipoles are CFD!
 
-        print(time.perf_counter()-time1)
-        time1 = time.perf_counter()
-        
-        #numerical_ORM = numerical.dORM_dCFD(ring, ind_bpm, ind_cor, ind_dip, ind_RF, step, "h") #Uses the dips, which assumes are in general CFD
-        #np.save(os.path.join(results,prefix +"h_numdORM_dCFD"),numerical_ORM)
-
-numerical.dORM_dCFD(ring, ind_bpm, ind_cor, ind_dip, ind_RF, step, direction) #In ALBAII all dipoles are CFD!
-    
 
 dORMV = np.load(os.path.join(results,prefix + "v_numdORM_dq.npy"))
 dORMH = np.load(os.path.join(results,prefix + "h_numdORM_dq.npy"))

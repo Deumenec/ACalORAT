@@ -11,6 +11,14 @@ import at
 
 dir_dict = {"h": 0, "v": 1}
 
+def get_mcf(ring):
+    if (ring.is_6d==True):
+        ring.disable_6d()
+        mcf = ring.mcf
+        ring.enable_6d()
+        return mcf
+    return ring.mcf
+
 def broadcast_vector(v, axis, ndim):
     """
     v    : 1D vector to broadcast
@@ -111,7 +119,7 @@ class AnaORM:
                  ind_dip: np.ndarray,
                  ind_CFD: np.ndarray):
         self.ring     = ring
-        self.mcf = mcf(ring)
+        self.mcf = get_mcf(ring)
         self.circumference = ring.circumference
         self.ind_bpm  = ind_bpm
         self.ind_quad = ind_quad

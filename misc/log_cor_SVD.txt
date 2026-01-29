@@ -1,0 +1,23 @@
+THRESHHOLD: e-11
+S'està analitzant el CFD 24 i s'ha fet els canvis a B0 -7.286248001480044e-09 B1 1e-07
+amb d_freq:  0  Drift_kick:  -3.1923592754766187e-09
+diff:  2.4776278111139023e-09
+amb d_freq:  -1.7466357463681263e-05  Drift_kick:  3.917398652202194e-10
+diff:  2.5194765168196654e-11
+amb d_freq:  -1.532303099971422e-05  Drift_kick:  -8.27538723212433e-11
+diff:  3.993743986192782e-12
+Iteració acabada, canvi en la frequencia de -1.5775802297337327e-05
+1
+S'està analitzant el CFD 28 i s'ha fet els canvis a B0 -7.129998705123583e-10 B1 1e-07
+amb d_freq:  0  Drift_kick:  -2.7702227753022105e-10
+diff:  7.109815077581828e-11
+amb d_freq:  -1.51567210541244e-06  Drift_kick:  5.2550929145407665e-11
+diff:  2.8851088823115393e-12
+Iteració acabada, canvi en la frequencia de -1.2281501879251783e-06
+2
+S'està analitzant el CFD 38 i s'ha fet els canvis a B0 -7.129998705123583e-10 B1 1e-07
+amb d_freq:  0  Drift_kick:  -2.5936831139677886e-10
+diff:  4.36352066224851e-11
+amb d_freq:  -1.4190819549347026e-06  Drift_kick:  5.211895429060447e-11
+diff:  2.083717981940253e-12
+Iteració acabada, canvi en la frequencia de -1.1339235013332646e-06

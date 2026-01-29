@@ -1,0 +1,39 @@
+###############################################################################
+#Seeing how the dispersion formulas work well! 
+###############################################################################
+
+
+###########Dispersion test in bpms######################
+cORM = AnaORM.AnaORM(ring,"h" ,ind_bpm, ind_cor["h"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+cORM.bpm.broadcasters(0, 2)
+#cORM.dip.correct_entrance()
+cORM.dip.broadcasters(1, 2)
+bpmdispls = cORM.disp_i(cORM.bpm, cORM.dip)
+math_utils.listPlot([cORM.bpm.dispersion ,bpmdispls ], ["bpmDisp", "bpmDispcalc"],title="bpm Dispersions" ,savename = "disps")
+########################################################
+
+###########Dispersion test in cors######################
+cORM = AnaORM.AnaORM(ring,"h" ,ind_bpm, ind_cor["h"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+#cORM.dip.correct_entrance()
+cORM.cor.broadcasters(0, 2)
+cORM.dip.broadcasters(1, 2)
+cordispls = cORM.disp_i(cORM.cor, cORM.dip)
+math_utils.listPlot([cORM.cor.dispersion ,cordispls ], ["corDisp", "corDispcalc"],title="cor Dispersions" ,savename = "disps")
+########################################################
+
+###########Dispersion test in dips######################
+cORM = AnaORM.AnaORM(ring,"h" ,ind_bpm, ind_cor["h"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+#cORM.dip.correct_entrance()
+cORM.dip1 = copy.deepcopy(cORM.dip)
+cORM.dip.broadcasters(0, 2)
+cORM.dip1.broadcasters(1, 2)
+cORM.quad.broadcasters(0, 2)
+dipdispls = cORM.disp_i(cORM.dip, cORM.dip1)
+math_utils.listPlot([cORM.dip.dispersion ,dipdispls ], ["dipDisp", "dipDispcalc"],title="dip Dispersions" ,savename = "disps")
+aaa = [[],[], []]
+aaa[0] = cORM.dip.dispersion
+aaa[1] = np.sum(cORM.nextdisp(cORM.dip), axis =1)
+########################################################

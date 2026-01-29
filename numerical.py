@@ -137,8 +137,8 @@ def kick_cor(ring , ind_bpm, ind_cor, threshold, original_orbit):
         applyCorrections(ring, ind_cor["v"], kicks["v"], "v")
         
         orbit = at.find_orbit6(ring, refpts=ind_bpm)[1]
-        dxs = np.array([orbit[i][0] -original_orbit[i][0] for i in range(len(orbit))])
-        dys = np.array([orbit[i][2] -original_orbit[i][2] for i in range(len(orbit))])
+        dxs = np.array([orbit[i][0] -original_orbit[ind_bpm[i]][0] for i in range(len(orbit))])
+        dys = np.array([orbit[i][2] -original_orbit[ind_bpm[i]][2] for i in range(len(orbit))])
         
         difference = rms(dxs)+rms(dys)
         #print(difference)
@@ -159,6 +159,7 @@ def Cor_SVD_cor(ring , ind_bpm, ind_cor, threshold, original_orbit):
     Afterwards, it changes the RF frequency to cancel "corrector drift"
     (Making the sum of kickangles zero)
     At least two iterations are needed for the method to work well
+    threshold: accepted threshold in the orbit difference.
     """
     
     #TODO: Implement as an argument
@@ -173,8 +174,8 @@ def Cor_SVD_cor(ring , ind_bpm, ind_cor, threshold, original_orbit):
     
     #Finds orbit at the beginig
     orbit = at.find_orbit6(ring, refpts=ind_bpm)[1]
-    dxs = np.array([orbit[i][0] -original_orbit[i][0] for i in range(len(orbit))])
-    dys = np.array([orbit[i][2] -original_orbit[i][2] for i in range(len(orbit))])
+    dxs = np.array([orbit[i][0] -original_orbit[ind_bpm[i]][0] for i in range(len(orbit))])
+    dys = np.array([orbit[i][2] -original_orbit[ind_bpm[i]][2] for i in range(len(orbit))])
     difference = rms(dxs)+rms(dys)
     if difference<threshold:
         print("No correction was needed")
@@ -227,8 +228,8 @@ def Cor_SVD_cor(ring , ind_bpm, ind_cor, threshold, original_orbit):
 
         #Comparo l'orbita amb l'original abans de les correccions
         orbit = at.find_orbit6(ring, refpts=ind_bpm)[1]
-        dxs = np.array([orbit[i][0] -original_orbit[i][0] for i in range(len(orbit))])
-        dys = np.array([orbit[i][2] -original_orbit[i][2] for i in range(len(orbit))])
+        dxs = np.array([orbit[i][0] -original_orbit[ind_bpm[i]][0] for i in range(len(orbit))])
+        dys = np.array([orbit[i][2] -original_orbit[ind_bpm[i]][2] for i in range(len(orbit))])
         difference = rms(dxs)+rms(dys)
         print("diff: ", difference)
         
@@ -271,8 +272,8 @@ def Full_SVD_cor(ring , ind_bpm, ind_cor, threshold, original_orbit):
     
     #Finds orbit at the beginig
     orbit = at.find_orbit6(ring, refpts=ind_bpm)[1]
-    dxs = np.array([orbit[i][0] -original_orbit[i][0] for i in range(len(orbit))])
-    dys = np.array([orbit[i][2] -original_orbit[i][2] for i in range(len(orbit))])
+    dxs = np.array([orbit[i][0] -original_orbit[ind_bpm[i]][0] for i in range(len(orbit))])
+    dys = np.array([orbit[i][2] -original_orbit[ind_bpm[i]][2] for i in range(len(orbit))])
     difference = rms(dxs)+rms(dys)
     if difference<threshold:
         print("No correction was needed")
@@ -325,8 +326,8 @@ def Full_SVD_cor(ring , ind_bpm, ind_cor, threshold, original_orbit):
 
         #Comparo l'orbita amb l'original abans de les correccions
         orbit = at.find_orbit6(ring, refpts=ind_bpm)[1]
-        dxs = np.array([orbit[i][0] -original_orbit[i][0] for i in range(len(orbit))])
-        dys = np.array([orbit[i][2] -original_orbit[i][2] for i in range(len(orbit))])
+        dxs = np.array([orbit[i][0] -original_orbit[ind_bpm[i]][0] for i in range(len(orbit))])
+        dys = np.array([orbit[i][2] -original_orbit[ind_bpm[i]][2] for i in range(len(orbit))])
         difference = rms(dxs)+rms(dys)
         print("diff: ", difference)
         
@@ -362,18 +363,17 @@ def compute_single_CFD(ring, CFD, ORM, direction, step, ind_bpm, ind_cor, closed
     ratio = B0/local_ring[CFD].PolynomB[1]
     
     #Activating the CFD
-
+    local_ring[CFD].PolynomB[1] += step
+    local_ring[CFD].PolynomB[0] += step*ratio
     
-    #local_ring[CFD].PolynomB[1] += step
-    #local_ring[CFD].PolynomB[0] += step*ratio
     print(f"S'està analitzant el CFD {CFD} i s'ha fet els canvis a B0 {step*ratio} B1 {step}")
     #Mètode iteratiu que efectua la correcció segons quin s'hagi triat a l'argument de la funció
     
     if method == "Cor_SVD":
-        Cor_SVD_cor(local_ring , ind_bpm, ind_cor, 1e-9, closed_orbit) 
+        Cor_SVD_cor(local_ring , ind_bpm, ind_cor, 1e-13, closed_orbit) 
         
     if method == "Full_SVD":
-        Full_SVD_cor(local_ring , ind_bpm, ind_cor, 1e-9, closed_orbit) 
+        Full_SVD_cor(local_ring , ind_bpm, ind_cor, 1e-13, closed_orbit) 
         
     #Observem que encara que hagi trobat l'estat "corregit" de l'anell, cal tornar
     #a calcular la matriu de resposta perqué aquesta pot haver canviat a l'última iteració, de fet és la gràcia de fer tot això.

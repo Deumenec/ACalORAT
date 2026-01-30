@@ -102,6 +102,7 @@ if read_numerical == False:
 
 h_numerical_dORM_dCFD = numerical.dORM_dCFD(ring, ind_bpm, ind_cor, ind_dip, ind_RF, step, "h", num = 5) #In ALBAII all dipoles are CFD!
 
+plt.show()
 
 dORMV = np.load(os.path.join(results,prefix + "v_numdORM_dq.npy"))
 dORMH = np.load(os.path.join(results,prefix + "h_numdORM_dq.npy"))

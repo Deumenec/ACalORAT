@@ -23,7 +23,8 @@ def ALBA(path):
     ind_quad =  np.array(at.get_refpts(ring, lambda el: el.FamName.startswith('QV') or el.FamName.startswith('QH')))
     ind_dip =  np.array(at.get_refpts(ring, lambda el: el.FamName.startswith('BEND')))
     ind_RF = []
-    return ring, ind_bpm, ind_cor, ind_quad, ind_dip, ind_RF
+    ind_sex = np.array([])
+    return ring, ind_bpm, ind_cor, ind_quad, ind_dip, ind_RF, ind_sex
     
 def ALBAII(path):
     """Reads the ALBAII lattice from the file and scans for the indices of
@@ -43,7 +44,9 @@ def ALBAII(path):
                                                        or  el.FamName.startswith('LQ') 
                                                        or el.FamName.startswith('MQ') 
                                                        or el.FamName.startswith('SQ')))
+    ind_sex    = np.array(at.get_refpts(ring, lambda el: el.FamName.startswith('SH') 
+                                                       or el.FamName.startswith('SV')))
 
     ind_dip    = at.get_refpts(ring, lambda el: el.FamName.startswith('QD') or el.FamName.startswith('QF'))
     ind_RF     = np.array([1467, 1468, 2209])#1467 és del 3r harmonic!
-    return ring, np.array(ind_bpm), ind_cor, np.array(ind_quad), np.array(ind_dip), ind_RF
+    return ring, np.array(ind_bpm), ind_cor, np.array(ind_quad), np.array(ind_dip), ind_RF, ind_sex

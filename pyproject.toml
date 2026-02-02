@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ACalORAT"
+version = "0.1.0"
+description = "ACalORAT: Analysis and Calculation Project"
+authors = [{name = "Your Name"}]
+readme = "README.md"
+requires-python = ">=3.8"
+
+# Specify your dependencies
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "joblib", 
+    "accelerator-toolbox"
+]

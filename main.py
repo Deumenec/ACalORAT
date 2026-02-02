@@ -32,7 +32,7 @@ lattice_file   = 'ring_a2.mat' #Read ALBA II lattice ring_a2.mat or THERING.mat 
 lattice_folder = 'lattices' #Important quan treballis amb aquests!
 results        = 'A2' #A1 for the ALBA lattice and A2 for the ALBAII lattice and CFDA2
 direction      = 'v' #v: vertical h: horizontal (SI NOMÉS ES FA EL CÀLCUL D'UNA)
-step_exp       =  7
+step_exp       =  4
 step           =  10**(-step_exp)
 read_numerical =  True
 dispersion     =  True  #Important ja que sino tot petaria amb la cromaticitat! calcular les matrius amb dispersió.
@@ -50,7 +50,7 @@ if RF_corr:
 ###############################################################################
 
 lattice_path = os.path.join(lattice_folder, lattice_file)
-ring, ind_bpm, ind_cor, ind_quad, ind_dip, ind_RF = read.ALBAII(lattice_path)
+ring, ind_bpm, ind_cor, ind_quad, ind_dip, ind_RF, ind_sex = read.ALBAII(lattice_path)
 
 ###############################################################################
 # Configuration of path name for the different options used
@@ -100,7 +100,76 @@ if read_numerical == False:
     if calc_dCFD:
         a=0
 
-h_numerical_dORM_dCFD = numerical.dORM_dCFD(ring, ind_bpm, ind_cor, ind_dip, ind_RF, step, "h", num = 5) #In ALBAII all dipoles are CFD!
+pathCFD = "full_SVD"
+pathCFD2 = "cor_SVD"
+#Prompt to calculate numerically the derivative of the response matrix with respect to CFDº
+
+
+num_dORM_dqH, num_dORM_dqV, dFreq_dCFD, dKicksH_dCFD, dKicksV_dCFD = numerical.dORM_dCFD(ring, ind_bpm, ind_cor, ind_dip, ind_RF, step, "h",multithread=True, method="Cor_SVD") #In ALBAII all dipoles are CFD!
+"""
+np.save(os.path.join(pathCFD,"num_dORM_dqH"),num_dORM_dqH)
+np.save(os.path.join(pathCFD,"num_dORM_dqV"),num_dORM_dqV)
+np.save(os.path.join(pathCFD,"dFreq_dCFD"),dFreq_dCFD)
+np.save(os.path.join(pathCFD,"dKicksH_dCFD"),dKicksH_dCFD)
+np.save(os.path.join(pathCFD,"dKicksV_dCFD"),dKicksV_dCFD)
+"""
+
+
+
+
+
+#Read calculated matrices
+num_dORM_dqH =np.load(os.path.join(pathCFD,"num_dORM_dqH.npy"))
+num_dORM_dqV =np.load(os.path.join(pathCFD,"num_dORM_dqV.npy"))
+dFreq_dCFD =np.load(os.path.join(pathCFD,"dFreq_dCFD.npy"))
+dKicksH_dCFD =np.load(os.path.join(pathCFD,"dKicksH_dCFD.npy"))
+dKicksV_dCFD =np.load(os.path.join(pathCFD,"dKicksV_dCFD.npy"))
+
+num_dORM_dqH2 =np.load(os.path.join(pathCFD2,"num_dORM_dqH.npy"))
+num_dORM_dqV2 =np.load(os.path.join(pathCFD2,"num_dORM_dqV.npy"))
+dFreq_dCFD2 =np.load(os.path.join(pathCFD2,"dFreq_dCFD.npy"))
+dKicksH_dCFD2 =np.load(os.path.join(pathCFD2,"dKicksH_dCFD.npy"))
+dKicksV_dCFD2 =np.load(os.path.join(pathCFD2,"dKicksV_dCFD.npy"))
+
+
+###### Calculating the dORM_dCFD with thin and thick elements!
+cORM = AnaORM.AnaORM(ring,"h" ,ind_bpm, ind_cor["h"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+cORM.quad.correct_strength()
+cORM.bpm.broadcasters(1, 3)
+cORM.cor.broadcasters(2, 3)
+cORM.dip.broadcasters(0, 3)
+ana_dORM_dCFDH0 = ( cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.dip) #Term corresponding to the quadrupole in CFD
+                   + 0)
+
+                   
+##########################################################
+
+cORM = AnaORM.AnaORM(ring,"v" ,ind_bpm, ind_cor["v"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+cORM.quad.correct_strength()
+cORM.bpm.broadcasters(1, 3)
+cORM.cor.broadcasters(2, 3)
+cORM.dip.broadcasters(0, 3)
+ana_dORM_dCFDV0 = ( cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.dip) #Term corresponding to the quadrupole in CFD
+                   + 0)
+
+
+
+"""
+Descripció dels resultats: Si introdueixo només el terme corresponent a els kicks els resultats semblen estar molt malament.
+Utilitzo però les derivades parcials exactes que necessitaria estimar tmb per veure quin és el "potencial" del mètode.
+"""
+
+
+
+
+
+
+
+
+
+
 
 plt.show()
 
@@ -164,8 +233,8 @@ disp0 = cORM.ni_sum(cORM.bpm, cORM.dip)
 dispReal = dispersion(ring)
 ########################################################
 
-plt.plot(disp0)
-plt.plot(dispReal)
+#plt.plot(disp0)
+#plt.plot(dispReal)
 
 
 

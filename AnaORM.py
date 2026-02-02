@@ -32,9 +32,9 @@ def broadcast_vector(v, axis, ndim):
 
     
 class Elements:
-    """Group of elements of a certain type bpms, correctors, dipoles, or 
-    quadrupoles containing all the important atributes from them with 
-    their optics. By default all optics are before entrance.
+    """Group of elements of a certain type: bpms, correctors, dipoles, 
+    quadrupoles or sextupoles containing all the important atributes from them with 
+    their optics. By default all optics are before entrance. at the element
     """
     def __init__(self, ring, all_optics ,ind, dir_ind, sgn):
         """
@@ -54,6 +54,7 @@ class Elements:
         if hasattr(ring[ind[0]], "Length"):     self.Length = np.array([ring[i].Length for i in ind])
         if hasattr(ring[ind[0]], "K"):          self.K = np.array([-sgn*ring[i].K for i in ind], dtype= complex)
         if hasattr(ring[ind[0]], "EntranceAngle"): self.EAngle = np.array([ring[i].EntranceAngle for i in ind], dtype= complex)   
+    
     def correct_entrance(self):
         """ To be called for dipoles to correct the optic functions inside of
         them after the fringe field and entrance angles. And adjust force.
@@ -395,21 +396,15 @@ class AnaORM:
         
         return np.real(ana_dORM_dq_disp) #Per assegurar que retorni un real bé! (#TODOcomprovar si està bé x tin)
     
-    def dRij_dqk_thick2q3(self, Ei : Elements, Ej : Elements, Ek : Elements):
-        """Computes the dRij_dqk asssuming thick correctors with quadrupolar moment inside and thick quadrupoles
-        basically it works in the same way as the other formual but remembering to apply the entrance corrections
-        to k for the dipoles!
-        """
-        #TODO implement as it could be useful for off-set elements.
-        return 0
         
-    def dRij_dCFDk(self, Ei : Elements, Ej : Elements, Ek : Elements):
-        """Calculates the derivative of the ORM with respect to the strength of CFD"""
-        #TODO implement all terms
-        CFD_term = 1 
-        Kicker_term = 1 
-        Energy_offset_term = 1 
-        return CFD_term+Kicker_term+Energy_offset_term
+    def dRij_dCFD_sex(self, Ei: Elements, Ej : Elements, Ek: Elements, Es: Elements , corr_activ: np.ndarray):
+        """
+        Computes the linear term corresponding to closed-orbit displacement in sextupoles due to CFD
+        """
+        # We start by calculating the closed-orbit displacement in sextupoles due to an infenitessimal activation
+        
+        # This is like activating qua
+        
     
     def Rij_disp_term(self, Ei : Elements, Ej : Elements, Ed : Elements):
         """Calculates the dispersion caused at the entrance of the ith element
@@ -424,11 +419,7 @@ class AnaORM:
         
         return np.sum(np.sqrt(Ei.betaB)/(2*np.sin(np.pi*self.tune))*Ed.BendB/Ed.LengthB * (Ilc1*Cil1+Ils1*Sil1), axis = Ed._bAxis)
     
-    def Rij_FD_term():
-        """Future, to calculate the ORM better, using the derivative of the MCF
-        """
-        a=0
-        return a
+
     def aMCF(self, Em: Elements,En: Elements):
         """Calculates the mcf for a ring due to dipoles
         Diples in the first and second component analytically

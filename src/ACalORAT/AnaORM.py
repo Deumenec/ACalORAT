@@ -8,6 +8,7 @@ Class with defined functions to compute ORMs and their derivatives
 """
 import numpy as np
 import at
+import copy
 
 dir_dict = {"h": 0, "v": 1}
 
@@ -39,7 +40,8 @@ class Elements:
     def __init__(self, ring, all_optics ,ind, dir_ind, sgn):
         """
         all_optics
-        ind : list of indices of those elements, assigns the optics for each calculation
+        ind : np.array 
+        list of only a certain class of elements elements, assigns the optics for each calculation
         """
         if len(ind) == 0: return
         self._ring= ring
@@ -51,32 +53,36 @@ class Elements:
         self.dispersion = np.array([all_optics[2]["dispersion"][i][2*dir_ind] for i in ind], dtype= complex)
         self.dispersionp = np.array([all_optics[2]["dispersion"][i][2*dir_ind+1] for i in ind], dtype= complex)
         if hasattr(ring[ind[0]], "BendingAngle"):self.Bend = np.array([ring[i].BendingAngle for i in ind])
-        if hasattr(ring[ind[0]], "Length"):     self.Length = np.array([ring[i].Length for i in ind])
-        if hasattr(ring[ind[0]], "K"):          self.K = np.array([-sgn*ring[i].K for i in ind], dtype= complex)
-        if hasattr(ring[ind[0]], "EntranceAngle"): self.EAngle = np.array([ring[i].EntranceAngle for i in ind], dtype= complex)   
-    
+        if hasattr(ring[ind[0]], "Length"):      self.Length = np.array([ring[i].Length for i in ind])
+        if hasattr(ring[ind[0]], "K"):           self.K = np.array([-sgn*ring[i].K for i in ind], dtype= complex)
+        if hasattr(ring[ind[0]], "EntranceAngle"): self.EntranceAngle = np.array([ring[i].EntranceAngle for i in ind], dtype= complex)   
+        if hasattr(ring[ind[0]], "ExitAngle"): self.ExitAngle = np.array([ring[i].ExitAngle for i in ind], dtype= complex)   
     def correct_entrance(self):
         """ To be called for dipoles to correct the optic functions inside of
         them after the fringe field and entrance angles. And adjust force.
         """
-        
-        self.alpha = self.alpha -self.beta*np.tan(self.EAngle)*(self.Bend/self.Length)
+
+        self.alpha = self.alpha -self.beta*np.tan(self.EntranceAngle)*(self.Bend/self.Length)
         self.K = self.K + (self.Bend/self.Length)*(self.Bend/self.Length)
         
     def correct_strength(self):
         """ Calculates the closed orbit off-momentum and uses it to correct the actual effective
-        strength of the quadrupoles... It can be applied but it is a really mince correction... 0.1%
+        strength of the quadrupoles... It can be applied before broadcasting but it is a really mince correction... 0.1%
+        
+        In principle also this momentum deviation is already in the same units as beam rigidity
         """
         co = at.find_orbit6(self._ring, self._ind)[1] 
         deviations = np.array([i[4] for i in co]) #The momentum deviation is in the 4rth component
         self.K = self.K/(1+deviations)
         
-    def average(self, attr: str):
+    def average(self):
         """Computes the average of the optical functions inside elements by slicing and propagating inside, it may be useful for
         some elements to be considered thin
         """
-        self.HasAverage = True
-        #TODO: Adapt function to compute the average value inside the element
+        #TODO: add extra averages as needed
+        k_total = self.K+(self.Bend/self.Length)**2 #Effective K value
+        phi = np.sqrt(k_total)*self.Length
+        self.avDispersion = self.dispersion *np.sin(phi)/phi + self.dispersionp/(k_total*self.Length)*(1-np.cos(phi))+self.Bend/k_total*(1-np.sin(phi)/phi)
         
     def broadcasters(self, axis, ndim):
         """
@@ -103,7 +109,7 @@ class AnaORM:
         lattice used
     direction : np.array
         "v" or "h", direction in which the calculations are performed
-    ind_bpm : np.array
+    ind      : dict
         Beam Position Monitors for the orbit response matrix
     ind_cor : np.array
         Correctors used for the ORM
@@ -114,33 +120,29 @@ class AnaORM:
     """
     def __init__(self, ring :at.lattice.lattice_object.Lattice, 
                  direction: str, 
-                 ind_bpm: np.ndarray, 
-                 ind_cor: np.ndarray,
-                 ind_quad:np.ndarray,
-                 ind_dip: np.ndarray,
-                 ind_CFD: np.ndarray):
+                 ind: dict):
         self.ring     = ring
         self.mcf = get_mcf(ring)
         self.circumference = ring.circumference
-        self.ind_bpm  = ind_bpm
-        self.ind_quad = ind_quad
-        self.ind_cor  = ind_cor
-        self.ind_dip  = ind_dip
-        self.ind_CFD  = ind_CFD
-
-        self.dir_ind = dir_dict[direction] #Index of the direction in at.get_optics
+        self.ind  = ind
+        self.dir  = direction
+        self.dir_ind = dir_dict[direction] #Index of the direction in at.get_optics in which the derivative is calculated
         self.all_optics = at.get_optics(ring, refpts=range(len(ring))) # get all the optics from the ring
         self.tune = self.all_optics[1]["tune"][self.dir_ind]
         self.sgn  = -(-1)**self.dir_ind #sign associated with that direction for quadrupoles
 
-    def assign_optics(self):
-        self.bpm = Elements(self.ring, self.all_optics ,self.ind_bpm, self.dir_ind, self.sgn)
-        self.cor = Elements(self.ring, self.all_optics ,self.ind_cor, self.dir_ind, self.sgn)
-        self.quad= Elements(self.ring, self.all_optics ,self.ind_quad, self.dir_ind,self.sgn)
-        self.dip = Elements(self.ring, self.all_optics ,self.ind_dip, self.dir_ind, self.sgn)
-        self.CFD= Elements(self.ring, self.all_optics ,self.ind_CFD, self.dir_ind,  self.sgn)
-    
-    
+    def assign_optics(self): #Asigna l'òptica dels elements que hi ha en general a l'anell, però sempre es pot fer a mào
+        self.bpm = Elements(self.ring, self.all_optics ,self.ind["bpm"], self.dir_ind, self.sgn)    
+        self.cor = Elements(self.ring, self.all_optics ,self.ind["cor"][self.dir], self.dir_ind, self.sgn)
+        self.quad= Elements(self.ring, self.all_optics ,self.ind["quad"], self.dir_ind,self.sgn)
+        self.dip = Elements(self.ring, self.all_optics ,self.ind["dip"], self.dir_ind, self.sgn)
+        if "CFD" in self.ind: self.CFD= Elements(self.ring, self.all_optics ,self.ind["CFD"], self.dir_ind,  self.sgn)
+        
+    def add_element(self,name, ind, direction): 
+        #Important; this new element can be for a calculation set in a different direction. This will change the optics functions that
+        #Are stored with it and the sign of its calculations, aleshores s'utilitzen aquestes direccions
+        """ADDS a new element to the calculation method to perform different calculations"""
+        setattr(self,name,Elements(self.ring, self.all_optics ,ind, dir_dict[direction], -(-1)**(dir_dict[direction])))
     #########################################################################
     # To use the functions here, broadcastig has to be defined on elements
     # By typing Element.broadcasters(axis, dim)
@@ -228,7 +230,7 @@ class AnaORM:
         #TODO: return extra term if the quadrupole index corresponds as well to a bending magnet
         
         #return case if the quadrupole has no bending component (basically for optics inside of )
-        return -np.cos(np.sqrt)
+        return 0
     def dIjc1_dqk_(self, Ej: Elements, Ek: Elements):
         """Returns the dispersion derivative in position j with respect to thin quadrupoles k
         """
@@ -291,6 +293,34 @@ class AnaORM:
          * (cosTerm + sinTerm))
         return np.real(ana_dORM_dq) #Per assegurar que retorni un real bé
     
+    
+    def dRij_dfringes(self, Ei : Elements, Ej : Elements, Ek : Elements):
+        """Calculates the entrance and exit dipole fringe field contribution to the ORM assuming thin correctors
+        the input elements MUST HAVE NO ENTRANCE CORRECTIONS APPLIED BEFORE
+        """
+        # We first calculate the effective strength of the thin quadrupole, which is given by:
+        # B * entrance angle ; where B = theta / length.
+        #TODO: ESCRIURE BÉ, ÉS UN TERME IMPORTANT!
+        Ek0 = copy.deepcopy(Ek)
+        
+        Cij1 = self.Cabn(Ei, Ej, 1)
+        Cik2 = self.Cabn(Ei, Ek, 2)
+        Cjk2 = self.Cabn(Ej, Ek, 2)
+        Sij1 = self.Sabn(Ei, Ej, 1)
+        Sik2 = self.Sabn(Ei, Ek, 2)
+        Sjk2 = self.Sabn(Ej, Ek, 2)
+        
+        
+        cosTerm = Cij1 * ( Cik2 + Cjk2 + 2* np.cos(np.pi * self.tune)**2)
+        sinTerm = Sij1 * ( Sik2 - Sjk2 + np.sin( 2*np.pi*self.tune)*(2*np.heaviside(Ei.muB-Ek.muB, 0)
+                    -2*np.heaviside(Ej.muB-Ek.muB, 0)-np.sign(Ei.muB-Ej.muB)))
+        
+        ana_dORM_dq = self.sgn * (
+        np.sqrt(Ei.betaB * Ej.betaB) * Ek.betaB * Ek.LengthB
+        / (8 * np.sin(np.pi * self.tune)* np.sin(2 * np.pi * self.tune)) 
+        * (cosTerm + sinTerm))
+        return np.real(ana_dORM_dq)
+    
     def dRij_dqk_thick23(self, Ei : Elements, Ej : Elements, Ek : Elements):
         """Computes the dRij_dqk asssuming thick correctors without quadrupolar component and thick quadrupoles"""
         Cij1 = self.Cabn(Ei, Ej, 1)
@@ -336,7 +366,7 @@ class AnaORM:
         
     def dni_dqk_sum(self, Ei : Elements, Ej: Elements, Ek: Elements):
         """ Derivative of the dispersions in Ei with respect to given quadrupole
-        strengths Ek considering Ej dipoles in the ring
+        strengths Ek considering Ej dipoles in the ring... VALIDATED!
         """
     
         Cij1 = self.Cabn(Ei, Ej, 1)
@@ -394,10 +424,37 @@ class AnaORM:
         #We can use the dispersions calculated before
         ana_dORM_dq_disp = (dni_dqk* dispj + dnj_dqk*dispi)/(self.mcf*self.circumference)
         
-        return np.real(ana_dORM_dq_disp) #Per assegurar que retorni un real bé! (#TODOcomprovar si està bé x tin)
+        return np.real(ana_dORM_dq_disp) #Per assegurar que retorni un real bé!
     
+    def dxldqk(self, Ei: Elements, Ej: Elements, Ek: Elements, El: Elements):
+        """
+        Orbit displacement in sextupoles
+        """
+        #TODO: Importantísssssssima també!
+    def dRij_dCFD_energy(self, Ei : Elements, Ej : Elements,Ej1 : Elements , Ek : Elements, Em: Elements):
+        """
+        Calculates de derivative of the Response matrix with respect to energy change by a combined function dipole.
+        It takes into acount the increase in quadrupole strengths
+            type                            Broadcast axis
         
-    def dRij_dCFD_sex(self, Ei: Elements, Ej : Elements, Ek: Elements, Es: Elements , corr_activ: np.ndarray):
+        Ei: bpms                            0
+        Ej: correctors                      1
+        Ej1:horizontal correctors           1
+        Ek: CFD                             2
+        Em: ALL quadrupoles in the ring     3  (including CFD of course)
+    
+        """
+        #We first calculate the response matrix due to all quadrupoles in the ring
+        
+        dRij_dquads = self.dRij_dqk_thick23(Ei, Ej, Em)
+        
+        Rnm = self.Rab_thick2_disp(Ei, Ej1)+self.Rab_thick2_disp(Ei, Ej1)
+        Rnk = self.Rab_thick2_disp(Ei, Ek)+self.Rab_thick2_disp(Ei, Ek)
+        
+
+        
+        return
+    def dRij_dCFD_dip(self, Ei: Elements, Ej : Elements, Ek: Elements, Es: Elements , corr_activ: np.ndarray):
         """
         Computes the linear term corresponding to closed-orbit displacement in sextupoles due to CFD
         """
@@ -447,7 +504,7 @@ class AnaORM:
             #En aquest cas considerem que la dispersió s'està originant també a l'interior de l'element que que 
             #L'angle d'entrada causa un "quadrupol prim" que canvia la derivada de la dispersió
             #TODO: pensar en els angles d'entrada i com la derivada de la dispersió canvia d'alguna manera amb un kick! 
-            kickedDP = Ei.dispersionpB #-Ei.dispersionB*np.tan(Ei.EAngleB)*(Ei.BendB/Ei.LengthB) #Focusing strength of entrance dipole
+            kickedDP = Ei.dispersionpB #-Ei.dispersionB*np.tan(Ei.EntranceAngleB)*(Ei.BendB/Ei.LengthB) #Focusing strength of entrance dipole
             return Ei.BendB/(Ei.LengthB*Ei.KB)+(Ei.dispersionB-Ei.BendB/(Ei.LengthB*Ei.KB))*np.cos(Ei.LengthB*np.sqrt(Ei.KB))+kickedDP*np.sin(Ei.LengthB*np.sqrt(Ei.KB))/np.sqrt(Ei.KB)
         return Ei.dispersionB*np.cos(Ei.LengthB*np.sqrt(Ei.KB))+Ei.dispersionpB*np.sin(Ei.LengthB*np.sqrt(Ei.KB))/np.sqrt(Ei.KB)
 

@@ -49,15 +49,13 @@ RF_corr        =  False
 calc_dq        =  False
 calc_dCFD      =  True
 
-if RF_corr:
-    results += "RFs"
-    
+
 ###############################################################################
 # Reading the lattice parameters
 ###############################################################################
 
 lattice_path = os.path.join(lattice_folder, lattice_file)
-ring, ind_bpm, ind_cor, ind_quad, ind_dip, ind_RF, ind_sex = read.ALBAII(lattice_path)
+ring, ind = read.ALBAII(lattice_path)
 
 #Initial values
 val_mcf = get_mcf(ring)
@@ -78,6 +76,23 @@ x1 = np.array([i[0] for i in c_orbit1])
 
 disp_num = - (val_mcf*ring_freq )*(x1-x0)/step 
 
+def dispersion(ring):
+    #Calculates dispersion in bpms
+    all_optics = at.get_optics(ring, refpts = ind_bpm)
+    return np.array([i[0] for i in all_optics[2]["dispersion"]])
+
+###########Dispersion test in bpms######################
+cORM = AnaORM.AnaORM(ring,"h" ,ind_bpm, ind_cor["h"], ind_quad, ind_dip, np.array([]))
+cORM.assign_optics()
+cORM.dip.correct_entrance() #Already correcting for the hef
+cORM.bpm.broadcasters(0, 2)
+cORM.dip.broadcasters(1, 2)
+disp0 = cORM.ni_sum(cORM.bpm, cORM.dip)
+dispReal = dispersion(ring)
+########################################################
+
+#plt.plot(disp0)
+#plt.plot(dispReal)
 
 
 

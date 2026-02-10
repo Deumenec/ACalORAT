@@ -72,7 +72,7 @@ def dORM_dq(ring, ind_bpm, ind_cor, ind_quad, step, direction):
     Resp.build_tracking()
     ORM = Resp.response
     
-    num_dORM_dq = Parallel(n_jobs=-1, verbose=10)(
+    num_dORM_dq = Parallel(n_jobs=-3, verbose=10)(
         delayed(compute_single_quad) (ring, quad, ORM, direction, step, ind_bpm, ind_cor) for quad in ind_quad)
     num_dORM_dq = np.array(num_dORM_dq)
     return num_dORM_dq
@@ -155,24 +155,26 @@ def kick_cor(ring , ind_bpm, ind_cor, threshold, original_orbit):
     applyCorrections(ring, ind_cor["v"], -t_kicks["v"], "v")
     return t_kicks, orbit
 
-def Cor_SVD_cor(ring , ind_bpm, ind_cor, threshold, original_orbit):
+def Cor_SVD_cor(ring , ind, threshold, original_orbit):
     """
     Uses SVD to correct orbit ONLY WITH correctors.
     Afterwards, it changes the RF frequency to cancel "corrector drift".
-    And loops until stability
+    And loops until stability or max_steps
     """
     
     max_steps = 10
     
+    
+    
     # Total accumulated changes
-    t_kicks = {"h":np.zeros(len(ind_cor["h"])), "v": np.zeros(len(ind_cor["v"]))}
+    t_kicks = {"h":np.zeros(len(ind["cor"]["h"])), "v": np.zeros(len(ind["cor"]["v"]))}
     t_d_ring_freq = 0.0 # Make sure it's a float
     
     # Kicks for current iteration
-    kicks = {"h":np.zeros(len(ind_cor["h"])), "v": np.zeros(len(ind_cor["v"]))}
+    kicks = {"h":np.zeros(len(ind["cor"]["h"])), "v": np.zeros(len(ind["cor"]["v"]))}
     
     # 1. Check Initial State
-    orbit = at.find_orbit6(ring, refpts=ind_bpm)[1]
+    orbit = at.find_orbit6(ring, refpts=ind["bpm"])[1]
     dxs = np.array([orbit[i][0] - original_orbit[i][0] for i in range(len(orbit))])
     dys = np.array([orbit[i][2] - original_orbit[i][2] for i in range(len(orbit))])
     
@@ -188,20 +190,20 @@ def Cor_SVD_cor(ring , ind_bpm, ind_cor, threshold, original_orbit):
         # Calculate Optics and ORM
         optics = at.get_optics(ring, refpts=range(len(ring)))[2]
         
-        dispersion = {
-            "h": np.array([optics["dispersion"][i][0] for i in range(len(ring))])[ind_bpm],
-            "v": np.array([optics["dispersion"][i][2] for i in range(len(ring))])[ind_bpm]
+        dispersion = { #Dispersion in bpms
+            "h": np.array([optics["dispersion"][i][0] for i in range(len(ring))])[ind["bpm"]],
+            "v": np.array([optics["dispersion"][i][2] for i in range(len(ring))])[ind["bpm"]]
         }
-        dispersion_cor = {
-            "h": np.array([optics["dispersion"][i][0] for i in range(len(ring))])[ind_cor["h"]],
-            "v": np.array([optics["dispersion"][i][2] for i in range(len(ring))])[ind_cor["v"]]
+        dispersion_cor = { #Dispersion in correctors
+            "h": np.array([optics["dispersion"][i][0] for i in range(len(ring))])[ind["cor"]["h"]],
+            "v": np.array([optics["dispersion"][i][2] for i in range(len(ring))])[ind["cor"]["v"]]
         }
         
-        Resp = at.latticetools.OrbitResponseMatrix(ring, "h", ind_bpm, ind_cor["h"])
+        Resp = at.latticetools.OrbitResponseMatrix(ring, "h", ind["bpm"], ind["cor"]["h"])
         Resp.build_tracking()
         ORMH = Resp.response
         
-        Resp = at.latticetools.OrbitResponseMatrix(ring, "v", ind_bpm, ind_cor["v"])
+        Resp = at.latticetools.OrbitResponseMatrix(ring, "v", ind["bpm"], ind["cor"]["v"])
         Resp.build_tracking()
         ORMV = Resp.response
         
@@ -217,12 +219,11 @@ def Cor_SVD_cor(ring , ind_bpm, ind_cor, threshold, original_orbit):
         t_kicks["h"] = t_kicks["h"] + kicks["h"]
         t_kicks["v"] = t_kicks["v"] + kicks["v"]
         
-        applyCorrections(ring, ind_cor["h"], kicks["h"], "h")
-        applyCorrections(ring, ind_cor["v"], kicks["v"], "v")
+        applyCorrections(ring, ind["cor"]["h"], kicks["h"], "h")
+        applyCorrections(ring, ind["cor"]["v"], kicks["v"], "v")
         
         # Frequency Correction Logic
         
-        #TODO: PARLAR AMB EL ZEUS SOBRE AQUESTA CONSTRAINT; TINC LES DADES CALCULADES X sense dispersion
         sum_kicks = np.sum(kicks["h"]*dispersion_cor["h"])
         
         ring_freq = ring.get_rf_frequency()
@@ -232,7 +233,6 @@ def Cor_SVD_cor(ring , ind_bpm, ind_cor, threshold, original_orbit):
         
         # Formula for the change in 
         d_ring_freq = -sum_kicks * mcf_val * ring_freq / (np.sum(dispersion_cor["h"]*quotient))
-        #TODO: PARLAR AMB EL ZEUS SOBRE AQUESTA CONSTRAINT; TINC LES DADES CALCULADES X sense dispersion
         
         if v: print(f"Step {10-max_steps} | d_freq: {d_ring_freq} | Sum Kicks: {sum_kicks}")
         
@@ -245,15 +245,14 @@ def Cor_SVD_cor(ring , ind_bpm, ind_cor, threshold, original_orbit):
         
         # Apply corrector change as well to compensate the frequency change 
         kicks2 = quotient*d_ring_freq/(mcf_val*new_ring_freq)
-        kicks["h"] = -kicks2
-        applyCorrections(ring, ind_cor["h"], kicks2 , "h")
+        applyCorrections(ring, ind["cor"]["h"], kicks2 , "h")
         t_kicks["h"] +=  kicks2
         
         # Check Convergence
-        orbit = at.find_orbit6(ring, refpts=ind_bpm)[1]
+        orbit = at.find_orbit6(ring, refpts=ind["bpm"])[1]
         dxs = np.array([orbit[i][0] - original_orbit[i][0] for i in range(len(orbit))])
         dys = np.array([orbit[i][2] - original_orbit[i][2] for i in range(len(orbit))])
-        
+        print(t_kicks)
         difference = rms(dxs) + rms(dys)
         if v: print("Diff: ", difference)
         
@@ -369,7 +368,7 @@ def Full_SVD_cor(ring, ind_bpm, ind_cor, threshold, original_orbit):
     if v: print("Iteration did not converge within max steps")
     return t_kicks, t_d_ring_freq, orbit
 
-def compute_single_CFD(ring, CFD, ORMH, ORMV, direction, step, ind_bpm, ind_cor, closed_orbit, method):
+def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
     
     # Deep copy of the ring
     local_ring = copy.deepcopy(ring)
@@ -397,27 +396,29 @@ def compute_single_CFD(ring, CFD, ORMH, ORMV, direction, step, ind_bpm, ind_cor,
     if v: print(f"Analysing CFD {CFD} | Step: {step:.1e} | Ratio: {ratio:.4f} | dPolyB0: {step*ratio:.1e}")
     
     # --- FEEDBACK LOOP ---
-    t_kicks = {"h": np.zeros(len(ind_cor["h"])), "v": np.zeros(len(ind_cor["v"]))}
+    t_kicks = {"h": np.zeros(len(ind["cor"]["h"])), "v": np.zeros(len(ind["cor"]["v"]))}
     t_df = 0.0
 
     if method == "Cor_SVD":
-        t_kicks, t_df, _ = Cor_SVD_cor(local_ring , ind_bpm, ind_cor, 5e-13, closed_orbit) 
+        t_kicks, t_df, _ = Cor_SVD_cor(local_ring , ind, 1e-9, closed_orbit) 
         
     elif method == "Full_SVD":
-        t_kicks, t_df, _ = Full_SVD_cor(local_ring , ind_bpm, ind_cor, 5e-13, closed_orbit) 
-        
+        t_kicks, t_df, _ = Full_SVD_cor(local_ring , ind, 1e-9, closed_orbit) 
+      
     # --- COMPUTE NEW RESPONSE ---
     # Observem que encara que hagi trobat l'estat "corregit" de l'anell, cal tornar
     # a calcular la matriu de resposta perqué aquesta pot haver canviat a l'última iteració
     
     Resp_localH = at.latticetools.OrbitResponseMatrix(
-        local_ring, "h", ind_bpm, ind_cor["h"])
+        local_ring, "h", ind["bpm"], ind["cor"]["h"])
     Resp_localV = at.latticetools.OrbitResponseMatrix(
-        local_ring, "v", ind_bpm, ind_cor["v"])
+        local_ring, "v", ind["bpm"], ind["cor"]["v"])
     
     Resp_localH.build_tracking()
     Resp_localV.build_tracking()
-    
+
+    new_orbit = at.find_orbit(ring, refpts = range(len(ring)))[1]
+    x_sex = np.array([i[0] for i in new_orbit])[ind["sex"]]
     # --- RETURN DICTIONARY ---
     # We divide by 'step' to get the derivative
     return {
@@ -425,29 +426,32 @@ def compute_single_CFD(ring, CFD, ORMH, ORMV, direction, step, ind_bpm, ind_cor,
         "dV": (Resp_localV.response - ORMV) / step,
         "dFreq": t_df / step,
         "dKicks_h": t_kicks["h"] / step,
-        "dKicks_v": t_kicks["v"] / step
+        "dKicks_v": t_kicks["v"] / step,
+        "dsex"     : x_sex /step
     }
 
-def dORM_dCFD(ring, ind_bpm, ind_cor, ind_CFD, ind_RF, step, direction, num=None, multithread=False, method="Cor_SVD"):
+def dORM_dCFD(ring, ind ,step, num=None, multithread=False, method="Cor_SVD"):
     """
     Returns:
         dORM_H, dORM_V, dFreq_vec, dKicksH_mat, dKicksV_mat
+        ind: dictionary containing all the indices
     """
 
     # 1. Initialize Storage Arrays
     # If num is specified, we limit the output size
-    n_calcs = len(ind_CFD) if num is None else min(len(ind_CFD), num)
-    target_cfds = ind_CFD[:n_calcs]
+    n_calcs = len(ind["CFD"]) if num is None else min(len(ind["CFD"]), num)
+    target_cfds = ind["CFD"][:n_calcs]
 
     # Initialize Base Response Matrices to get shapes
     print("Calculating Base ORMs...")
-    RespH = at.latticetools.OrbitResponseMatrix(ring, "h", ind_bpm, ind_cor["h"])
+    RespH = at.latticetools.OrbitResponseMatrix(ring, "h", ind["bpm"], ind["cor"]["h"])
     RespH.build_tracking() # FIX: build_tracking returns None, modifies in place
     ORMH = RespH.response 
 
-    RespV = at.latticetools.OrbitResponseMatrix(ring, "v", ind_bpm, ind_cor["v"])
+    RespV = at.latticetools.OrbitResponseMatrix(ring, "v", ind["bpm"], ind["cor"]["v"])
     RespV.build_tracking() # FIX: build_tracking returns None
     ORMV = RespV.response
+    closed_orbit = at.find_orbit6(ring, refpts=ind["bpm"])[1] 
     
     # 2. Allocate Result Arrays
     # Shapes: [N_CFD, N_BPM, N_COR]
@@ -458,10 +462,12 @@ def dORM_dCFD(ring, ind_bpm, ind_cor, ind_CFD, ind_RF, step, direction, num=None
     dFreq_dCFD = np.zeros(n_calcs)
     
     # Shapes: [N_CFD, N_COR] (Vector kick change per CFD)
-    dKicksH_dCFD = np.zeros((n_calcs, len(ind_cor["h"])))
-    dKicksV_dCFD = np.zeros((n_calcs, len(ind_cor["v"])))
+    dKicksH_dCFD = np.zeros((n_calcs, len(ind["cor"]["h"])))
+    dKicksV_dCFD = np.zeros((n_calcs, len(ind["cor"]["v"])))
+    
+    #Orbit at sextupoles for tracking results
+    x_sex = np.zeros((n_calcs, len(ind["sex"])))
 
-    closed_orbit = at.find_orbit6(ring, refpts=ind_bpm)[1] 
     
     # 3. Execution (Single vs Multi-thread)
     results = []
@@ -469,13 +475,13 @@ def dORM_dCFD(ring, ind_bpm, ind_cor, ind_CFD, ind_RF, step, direction, num=None
     if not multithread:
         for i, CFD in enumerate(target_cfds):
             print(f"Processing {i+1}/{n_calcs} (CFD index {CFD})")
-            res = compute_single_CFD(ring, CFD, ORMH, ORMV, direction, step, ind_bpm, ind_cor, closed_orbit, method)
+            res = compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method)
             results.append(res)
             
     else:
-        results = Parallel(n_jobs=-1, verbose=10)(
+        results = Parallel(n_jobs=10, verbose=10)(
             delayed(compute_single_CFD)(
-                ring, CFD, ORMH, ORMV, direction, step, ind_bpm, ind_cor, closed_orbit, method
+                ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method
             ) for CFD in target_cfds
         )
     
@@ -487,9 +493,10 @@ def dORM_dCFD(ring, ind_bpm, ind_cor, ind_CFD, ind_RF, step, direction, num=None
         dFreq_dCFD[i]   = res["dFreq"]
         dKicksH_dCFD[i] = res["dKicks_h"]
         dKicksV_dCFD[i] = res["dKicks_v"]
+        x_sex[i]        = res["dsex"]
       
     print("Calculation Finished.")
-    return num_dORM_dqH, num_dORM_dqV, dFreq_dCFD, dKicksH_dCFD, dKicksV_dCFD
+    return num_dORM_dqH, num_dORM_dqV, dFreq_dCFD, dKicksH_dCFD, dKicksV_dCFD, x_sex
 
 
     

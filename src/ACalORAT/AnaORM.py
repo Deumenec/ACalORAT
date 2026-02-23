@@ -447,8 +447,8 @@ class AnaORM:
         dRij_dqk = self.dRij_dqk_thick23(Ei, Ej, Ek)
          
         return np.real(np.sum(dRij_dqk * (-Ek.KB), axis=0))
-        
-    def dRij_dCFD_energy(self, Ei: Elements, Ej: Elements, Ek: Elements, dRijdEnergy):
+     
+    def dRij_dCFD_energy(self, Ei: Elements, Ej: Elements, Ek: Elements):
         """
         Uses: and calculates the derivative of the energy with respect to a change in a given CFD
         Ei: bpms in horizontal
@@ -457,9 +457,9 @@ class AnaORM:
         dRijdEnergy: in axis 0 and 1
         """
         
-        Ei.broadcasters(0, 2) 
-        Ej.broadcasters(1, 2)
-        Ek.broadcasters(1, 2) 
+        Ei.broadcasters(0, 3)   #n
+        Ej.broadcasters(1, 3)   #m
+        Ek.broadcasters(2, 3)   #k
 
         # 2. Extract Optics
         eta_n = Ei.dispersion        # (176,)
@@ -469,37 +469,26 @@ class AnaORM:
         eta_k = Ek.avDispersion      # (208,)
 
         # 3. Compute 2D Matrices
-        Rnm = self.Rab_thick2_(Ei, Ej)  # (176, 176)
-        Rnk = self.Rab_thick2_(Ei, Ek)  # (176, 208)
-
+        Rnm = self.Rab_thick2_(Ei, Ej)
+        Rnk = self.Rab_thick2_(Ei, Ek)
+        
+        
+        
         # 4. Energy Sensitivity Formula Logic
-        R_inv = np.linalg.pinv(Rnm)     
+        R_inv = np.linalg.pinv(np.squeeze(Rnm))[:, None, :] 
         
-        # Denominator sum (scalar)
-        denom = np.dot(eta_m, np.dot(R_inv, eta_n))
         
-        # Numerator vector (208,)
-        num_vec = np.dot(eta_m, np.dot(R_inv, Rnk))
+        num = 1#np.sum(eta_m*R_inv*Rnk, axis = (0,1))
+        denom = 1#np.sum(eta_m)
 
         # 5. Build d_delta/d_qk (BPM x CFD) -> (176 x 208)
-        term1 = np.outer(eta_n, eta_k) / (self.mcf * self.circumference)
-        term2 = (num_vec / denom)[np.newaxis, :]
+        term1 = eta_k / (self.mcf * self.circumference)
+        term2 = (num / denom)
         
         # Sensitivity d_delta/dqk (176, 208)
-        d_delta_dqk = -(term1 + term2) * (Ek.Bend / Ek.K)
+        d_delta_dqk = (term1) * (Ek.Bend / Ek.K)
 
-        # 6. Final Tensor Assembly (208, 176, 176)
-        # i = BPM (176), j = Cor (176), k = CFD (208)
-        # We want res[k, i, j] = dRijdEnergy[i, j] * d_delta_dqk[i, k]
-        res = np.einsum('ij,ik->kij', dRijdEnergy, d_delta_dqk)
-
-        # 7. Reset broadcasters to original 3D state for future calculations
-        # Using (208, 176, 176) order: k=0, i=1, j=2
-        Ek.broadcasters(0, 3)
-        Ei.broadcasters(1, 3)
-        Ej.broadcasters(2, 3)
-
-        return np.real(res)
+        return d_delta_dqk
     
     
     def Rij_disp_term(self, Ei : Elements, Ej : Elements, Ed : Elements):

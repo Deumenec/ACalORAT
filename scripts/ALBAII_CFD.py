@@ -68,14 +68,14 @@ pathCFD = "Cor_SVD"
 if  p["calculate"]:
     if not os.path.exists(SAVE / pathCFD):
         os.mkdir(SAVE / pathCFD)
-    num_dORM_dqH, num_dORM_dqV, dFreq_dCFD, dKicksH_dCFD, dKicksV_dCFD, x_sex = numerical.dORM_dCFD(ring, ind, step ,multithread=False, method="Cor_SVD", num = 10) #In ALBAII all dipoles are CFD!
+    num_dORM_dqH, num_dORM_dqV, dFreq_dCFD, dKicksH_dCFD, dKicksV_dCFD, x_sex, energy = numerical.dORM_dCFD(ring, ind, step ,multithread=False, method="Cor_SVD", num = 10) #In ALBAII all dipoles are CFD!
     np.save(SAVE /pathCFD /"num_dORM_dqH",num_dORM_dqH)
     np.save(SAVE /pathCFD /"num_dORM_dqV",num_dORM_dqV)
     np.save(SAVE /pathCFD /"dFreq_dCFD",dFreq_dCFD)
     np.save(SAVE /pathCFD /"dKicksH_dCFD",dKicksH_dCFD)
     np.save(SAVE /pathCFD /"dKicksV_dCFD",dKicksV_dCFD)
     np.save(SAVE /pathCFD /"x_sex",x_sex)
-
+    np.save(SAVE /pathCFD /"energy",energy)
 else:
     try:
         num_dORM_dqH = np.load(SAVE /pathCFD /"num_dORM_dqH.npy")

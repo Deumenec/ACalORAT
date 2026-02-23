@@ -76,6 +76,7 @@ def single_snum_quad(ring, quad, ORM, direction, step, ind):
     
 def compute_average_dispersion(ring, ind, all_disp):
     """ Calculates the average dispersion in a set of ring elements.
+    In the horizontal direction
     Handles thick elements, thin elements, and zero-focusing correctors/drifts safely.
     """
     avDispersion = np.zeros(len(ind))
@@ -252,7 +253,7 @@ def Cor_SVD_cor(ring, ind, threshold, original_orbit, ORMH, ORMV, recalc_step=5)
     """
     Corrects orbit using Average Dispersion for frequency feedback.
     """
-    max_steps = 10
+    max_steps = 15
     local_ORMH = ORMH
     local_ORMV = ORMV
     
@@ -361,11 +362,13 @@ def Cor_SVD_cor(ring, ind, threshold, original_orbit, ORMH, ORMV, recalc_step=5)
         dys = np.array([bpm_orbit[i][2] - original_orbit[i][2] for i in range(len(bpm_orbit))])
         
         diff = rms(dxs) + rms(dys)
-        print(f"Step {step} | Diff: {diff:.2e} | dFreq: {d_ring_freq:.2e}")
+        if v: print(f"Step {step} | dFreq: {t_d_ring_freq} | Sum Kicks: {sum_kicks} | diff: {diff} ")
+
         
         if diff < threshold:
+            
             return t_kicks, t_d_ring_freq, orbit
-
+    print("iteration did not converge")
     return t_kicks, t_d_ring_freq, orbit
 
 
@@ -447,7 +450,7 @@ def Full_SVD_cor(ring, ind_bpm, ind_cor, threshold, original_orbit):
         t_kicks["v"] += kicks_v
         t_d_ring_freq += d_freq
         sum_kicks = np.sum(t_kicks["h"])
-        if v: print(f"Step {10-max_steps} | d_freq_total: {t_d_ring_freq} | Sum Kicks: {sum_kicks}")
+        if v: print(f"Step {10-max_steps} | d_freq_total: {t_d_ring_freq} | Sum Kicks: {sum_kicks} | dxs:  ")
 
         # Apply to Ring
         applyCorrections(ring, ind_cor["h"], kicks_h, "h")
@@ -462,6 +465,8 @@ def Full_SVD_cor(ring, ind_bpm, ind_cor, threshold, original_orbit):
         dys = np.array([orbit[i][2] - original_orbit[i][2] for i in range(len(orbit))])
         
         difference = rms(dxs) + rms(dys)
+        
+        if v: print(f"Step {10-max_steps} | d_freq_total: {t_d_ring_freq} | Sum Kicks: {sum_kicks} | diff: {difference} ")
         if v: print(f"  Orbit Diff: {difference:.2e}")
         
         if difference < threshold:
@@ -513,7 +518,6 @@ def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
         t_df = 0.0
 
         if method == "Cor_SVD":
-            print("holaaa")
             t_kicks, t_df, _   = Cor_SVD_cor(local_ring, ind, 1e-9, closed_orbit, ORMH, ORMV) 
         elif method == "Full_SVD":
             t_kicks, t_df, _   = Full_SVD_cor(local_ring, ind, 1e-9, closed_orbit) 
@@ -531,7 +535,7 @@ def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
         # Assuming your AT version returns the orbit list at index [1]
         new_orbit = at.find_orbit(local_ring, refpts=range(len(local_ring)))[1]
         x_sex = np.array([i[0] for i in new_orbit])[ind["sex"]]
-        energy = np.average(new_orbit[:,4]-closed_orbit[:,4])
+        energy = np.average(new_orbit[:,4])
         return {
             "H": Resp_localH.response,
             "V": Resp_localV.response,
@@ -539,7 +543,7 @@ def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
             "kicks_h": t_kicks["h"],
             "kicks_v": t_kicks["v"],
             "sex": x_sex,
-            "energy" : energy
+            "denergy" : energy
         }
 
     # --- 3. EXECUTE BOTH SIDES ---
@@ -612,7 +616,7 @@ def dORM_dCFD(ring, ind ,step, num=None, multithread=False, method="Cor_SVD"):
             results.append(res)
             
     else:
-        results = Parallel(n_jobs=10, verbose=10)(
+        results = Parallel(n_jobs=-2, verbose=10)(
             delayed(compute_single_CFD)(
                 ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method
             ) for CFD in target_cfds
@@ -629,7 +633,7 @@ def dORM_dCFD(ring, ind ,step, num=None, multithread=False, method="Cor_SVD"):
         energy[i]       = res["denergy"]
       
     print("Calculation Finished.")
-    return num_dORM_dqH, num_dORM_dqV, dFreq_dCFD, dKicksH_dCFD, dKicksV_dCFD, x_sex
+    return num_dORM_dqH, num_dORM_dqV, dFreq_dCFD, dKicksH_dCFD, dKicksV_dCFD, x_sex, energy
 
 def ORM(ring, ind, direction = "v"):
     #Checked that further limit produces no significant change.

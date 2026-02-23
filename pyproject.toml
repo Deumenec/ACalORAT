@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "ACalORAT"
 version = "0.1.0"
 description = "ACalORAT: Analysis and Calculation Project"
-authors = [{name = "Your Name"}]
+authors = [{name = "Domènec Huerta"}]
 readme = "README.md"
 requires-python = ">=3.8"
 

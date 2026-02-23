@@ -38,6 +38,31 @@ def plot_both(ORMv, ORMh, nORMv, nORMh, latex = False, title = None):
     axis[1].plot(hquadERROR)
     plt.show()
     return
+
+def plot_double(vec1, vec2, title1, title2, title = None, latex = False, yaxis= None):
+    """Ploting two generic vectors"""
+    
+    if latex == True:
+        rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
+        rc('text', usetex=True)
+    fig, axis = plt.subplots(1,2,figsize=(10,5))
+    #fig.suptitle("Errors along quadrupoles for the thin formula ", fontsize = 20)
+    fig.subplots_adjust(top=0.85)
+    if yaxis is not None: plt.ylabel(yaxis)
+    axis[0].set_xlabel('BPM')
+    axis[1].set_xlabel('BPM')
+    axis[0].title.set_text(title1)
+    axis[0].plot(vec1)
+
+    axis[1].title.set_text(title2)
+    axis[1].plot(vec2)
+    plt.show()
+    
+    
+def compare(mA, mB):
+    difference = math_utils.normalized_RMSE(mA, mB, 1)
+    plt.plot(difference)
+    plt.show()
     
 def plot_both_Zeus(ORMv, ORMh, nORMv, nORMh, latex = False, SAVE = None, title = None):
     

@@ -36,9 +36,10 @@ def symetric_error(arrA, arrB, dims):
     comp = np.average(comp, axis = dims)/norm
     return comp
 
-def errorZeus(dORMA, dORMB):
+def errorZeus(dORMA, dORMB, epsilon = 0.05):
     """Dos np.arrays 1ra de referència i 2na de comparació"""
-    return np.average(np.std(dORMA-dORMB, axis = 1)/np.std(dORMA, axis = 1), axis = 1)*100
+    
+    return np.average(np.std(dORMA-dORMB, axis = 1)/(np.std(dORMA, axis = 1)+epsilon), axis = 1)*100
 def normalized_RMSE(arrA, arrB, dims):
     """Calculates the RMSD as a %
     """

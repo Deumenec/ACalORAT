@@ -73,13 +73,14 @@ pathCFD = "Cor_SVD"
 if  p["calculate"]:
     if not os.path.exists(SAVE / pathCFD):
         os.mkdir(SAVE / pathCFD)
-    num_dORM_dqH, num_dORM_dqV, dFreq_dCFD, dKicksH_dCFD, dKicksV_dCFD, x_sex = numerical.dORM_dCFD(ring, ind, step ,multithread=True, method="Cor_SVD", num = 10) #In ALBAII all dipoles are CFD!
+    num_dORM_dqH, num_dORM_dqV, dFreq_dCFD, dKicksH_dCFD, dKicksV_dCFD, x_sex = numerical.dORM_dCFD(ring, ind, step ,multithread=True, method="Cor_SVD", num = 8) #In ALBAII all dipoles are CFD!
     np.save(SAVE /pathCFD /"num_dORM_dqH",num_dORM_dqH)
     np.save(SAVE /pathCFD /"num_dORM_dqV",num_dORM_dqV)
     np.save(SAVE /pathCFD /"dFreq_dCFD",dFreq_dCFD)
     np.save(SAVE /pathCFD /"dKicksH_dCFD",dKicksH_dCFD)
     np.save(SAVE /pathCFD /"dKicksV_dCFD",dKicksV_dCFD)
     np.save(SAVE /pathCFD /"x_sex",x_sex)
+    
 
 else:
     try:
@@ -117,27 +118,51 @@ cORM.bpm.broadcasters(1, 3)
 cORM.cor.broadcasters(2, 3)
 cORM.dip.broadcasters(0, 3)
 
+cORM.add_element("allQuad", ind["dip"], "h")
+cORM.allQuad.broadcasters(0,3)
 #Terms for the energy perturbation:    
-cORM.bpm2 = copy.deepcopy(cORM.bpm)
-cORM.cor2 = copy.deepcopy(cORM.cor)
-cORM.dip2 = copy.deepcopy(cORM.dip)
-cORM.dip2.average()
-cORM.add_element("allQuad", ind["all_quad"], "h")
-cORM.add_element("corH", ind["cor"]["h"], "h")
-cORM.bpm2.broadcasters(0, 4)
-cORM.cor2.broadcasters(1, 4)
-cORM.corH.broadcasters(1, 4)
-cORM.dip2.broadcasters(2, 4)
-cORM.allQuad.broadcasters(3,4)
 
-ana_dORM_dCFDV0 = (cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.dip)         #Term corresponding to the quadrupole in CFD with a factor due to the extra change due to change in effective quadrupole because of the change in dipole moment
-                  )# +cORM.dRij_dCFD_energy(cORM.bpm2, cORM.cor2, cORM.dip2, cORM.allQuad))    #Term for energy change
-                   
-                   
-                   
-                   
-plot_utils.plot_both_Zeus(num_dORM_dqV, num_dORM_dqV,ana_dORM_dCFDV0[0:10] , ana_dORM_dCFDV0[0:10]) #THE CHANGE IN ENERGY IS REALLY NOISY but who cares ):
-#Cool plot with the kicker activation!
-#plot_utils.rainbow_plot(dKicksH_dCFD[:], SAVE / "plots" , NAME = "rainbow_kicks.pdf" )
-CFD_RATIO = [ring[i].BendingAngle / ring[i].Length*ring[i].EntranceAngle for i in ind["CFD"] ]
-plt.plot(CFD_RATIO[0:10])
+cORM.add_element("bpmh", ind["bpm"], "h")
+cORM.add_element("diph", ind["dip"], "h") #Adds correctors in the horizontal direction.
+cORM.diph.average()
+cORM.add_element("corh", ind["cor"]["h"], "h")
+
+#dRijdEnergy_num = numerical.dORMdEnergy(ring, ind)
+dRijdEnergy= cORM.dRij_dEnergy(cORM.bpm, cORM.cor, cORM.allQuad)
+dRijdEnergy_quick = numerical.quickdORMdEnergy(ring, ind)
+
+Rij = np.sum( cORM.Rab_thick2_(cORM.bpm, cORM.cor), axis = 0)
+
+#Term corresponding to the quadrupole in CFD with a factor due to the extra change due to change in effective quadrupole because of the change in dipole moment
+Aana_dORM_dCFDV00 = cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.dip)   
+Aana_dORM_dCFDV0 = Aana_dORM_dCFDV00 + cORM.dRij_dCFD_energy(cORM.bpmh, cORM.corh, cORM.diph, dRijdEnergy)    #Term for energy change
+Aana_dORM_energy_term = cORM.dRij_dCFD_energy(cORM.bpmh, cORM.corh, cORM.diph, dRijdEnergy)
+#Observem com en aquest cas, la diferència entre la matriu de resposta i la analítica amb només els quadrupols dona matrius proporcionals respecte cada quadrupol          
+
+aatest= num_dORM_dqV-Aana_dORM_dCFDV0[0:10]
+
+#I per exemple:
+
+aatest[0]/aatest[1]
+
+#Es constant 12 exepte els punts on la resposta és molt petita (error numèric) 
+#Això suggereix que el terme "important" que falta és la derivada respecte l'energia.
+#De fet, podem calcular la constant de proporcionalitat per cada CFD, obtenint una estimació de l'energia
+
+constants0 = num_dORM_dqV/dRijdEnergy
+c0_av = np.average(constants0, axis = (1,2))
+c0_dv = np.std(constants0, axis = (1,2))
+
+constants1 = (num_dORM_dqV-Aana_dORM_dCFDV00[0:10])/dRijdEnergy
+c1_av = np.average(constants1, axis = (1,2))
+c1_dv = np.std(constants1, axis = (1,2))
+
+#Observem com utilitzant aquests canvis d'energia numèrics, podem aconseguir estimacions molt bones!
+
+Aana_dORM_dCFDV1 = Aana_dORM_dCFDV00[0:10] + c1_av[:,None, None]*dRijdEnergy[None, :, :]
+
+#Per comparar la matriu numèrica exacta amb la calculada amb les fórmules de l'òptica
+
+
+              
+plot_utils.plot_both_Zeus(num_dORM_dqV, num_dORM_dqV,Aana_dORM_dCFDV0[0:10] , Aana_dORM_dCFDV1) #THE CHANGE IN ENERGY IS REALLY NOISY but who cares ):

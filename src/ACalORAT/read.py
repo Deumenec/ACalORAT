@@ -52,3 +52,26 @@ def ALBAII(path):
     ind_all_quad = np.sort(np.concatenate((ind_quad,ind_dip)))
     ind = {"bpm": ind_bpm, "cor": ind_cor, "quad": ind_quad, "dip": ind_dip,"CFD": ind_dip , "RF": ind_RF, "sex": ind_sex, "all_quad":ind_all_quad}
     return ring, ind
+
+def find_ind_ALBAII(ring):
+    """From a modified lattice of ALBAII indices for elements are found."""
+    ordsV = re.compile('^COR$|^SH[1-7][1-4]?$|^SV[246]');
+    ordsH = re.compile('^COR$|^SV[1-7][1-4]?$');
+
+    ind_bpm = at.get_refpts(ring, lambda el: el.FamName.startswith('BPM') and not el.FamName.startswith('BPM_')) #BPMs bons sense l'element nou
+    #ind_bpm     = np.array([i[0]-1 for i in mat["bpmlist"]])
+    ind_cor     = { "v": at.get_refpts(ring, lambda el: ordsV.search(el.FamName)), 
+                    "h": at.get_refpts(ring, lambda el: ordsH.search(el.FamName))}
+    ind_quad    = np.array(at.get_refpts(ring, lambda el: el.FamName.startswith('LIUQ') 
+                                                       or el.FamName.startswith('LIDQ')
+                                                       or  el.FamName.startswith('LQ') 
+                                                       or el.FamName.startswith('MQ') 
+                                                       or el.FamName.startswith('SQ')))
+    ind_sex    = np.array(at.get_refpts(ring, lambda el: el.FamName.startswith('SH') 
+                                                       or el.FamName.startswith('SV')))
+    ind_dip    = at.get_refpts(ring, lambda el: el.FamName.startswith('QD') or el.FamName.startswith('QF'))
+    ind_RF     = np.array([1467, 1468, 2209])#1467 és del 3r harmonic!
+    ind_all_quad = np.sort(np.concatenate((ind_quad,ind_dip)))
+    ind = {"bpm": ind_bpm, "cor": ind_cor, "quad": ind_quad, "dip": ind_dip,"CFD": ind_dip , "RF": ind_RF, "sex": ind_sex, "all_quad":ind_all_quad}
+    return ind
+    

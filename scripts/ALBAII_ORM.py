@@ -36,8 +36,7 @@ dispersion     =  True  #Important ja que sino tot petaria amb la cromaticitat! 
 lin_all        =  False  #To turn off higher order multipoles
 max_ind        =  2     #cutoff index in polynomB
 RF_corr        =  False
-calc_dq        =  False
-calc_dCFD      =  True
+calc_dq        =  True
 
     
 ###############################################################################
@@ -89,11 +88,11 @@ if read_numerical == False:
     if calc_dq:
         numerical_ORM = numerical.dORM_dq(ring, ind["bpm"], ind["cor"]["v"], ind["quad"], step, "v")
         np.save(os.path.join(results,prefix +"v_numdORM_dq"),numerical_ORM)
+        """
         for i in ind["cor"]["h"]: ring[i].KickAngle = np.array([0,0])
         numerical_ORM = numerical.dORM_dq(ring, ind["bpm"], ind["cor"]["h"], ind["quad"], step, "h")
         np.save(os.path.join(results,prefix + "h_numdORM_dq"),numerical_ORM)
-    if calc_dCFD:
-        a=0
+        """
 
 
 dORMV = np.load(os.path.join(results,prefix + "v_numdORM_dq.npy"))
@@ -107,12 +106,12 @@ dORMH = np.load(os.path.join(results,prefix + "h_numdORM_dq.npy"))
 ###### Example calculating the dORM_dq with thin and thick elements!
 cORM = AnaORM.AnaORM(ring,"v" ,ind)
 cORM.assign_optics()
-cORM.quad.correct_strength()
 cORM.bpm.broadcasters(1, 3)
 cORM.cor.broadcasters(2, 3)
 cORM.quad.broadcasters(0, 3)
 thickv = cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad)
 ##########################################################
+
 
 ###### Example calculating the dORM_dq with thin and thick elements!
 cORM = AnaORM.AnaORM(ring,"h", ind)

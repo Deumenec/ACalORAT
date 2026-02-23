@@ -33,7 +33,7 @@ direction      = 'v' #v: vertical h: horizontal (SI NOMÉS ES FA EL CÀLCUL D'UN
 step           =  1e-5
 read_numerical =  True   #To calculate the jacobians numerically
 dispersion     =  True  #Important ja que sino tot petaria amb la cromaticitat! calcular les matrius amb dispersió.
-lin_all        =  False  #To turn off higher order multipoles
+lin_all        =  False #To turn off higher order multipoles
 max_ind        =  2     #cutoff index in polynomB
 RF_corr        =  False
 calc_dq        =  True
@@ -56,7 +56,7 @@ if lin_all == False:
     
 if dispersion == True:
     dsname = "d_"    
-if dispersion == False:
+if dispersion == False: 
     dsname = "nd_" 
 
 prefix = linname + dsname
@@ -88,10 +88,11 @@ if read_numerical == False:
     if calc_dq:
         numerical_ORM = numerical.dORM_dq(ring, ind["bpm"], ind["cor"]["v"], ind["quad"], step, "v")
         np.save(os.path.join(results,prefix +"v_numdORM_dq"),numerical_ORM)
+        
         for i in ind["cor"]["h"]: ring[i].KickAngle = np.array([0,0])
         numerical_ORM = numerical.dORM_dq(ring, ind["bpm"], ind["cor"]["h"], ind["quad"], step, "h")
         np.save(os.path.join(results,prefix + "h_numdORM_dq"),numerical_ORM)
-
+        
 
 dORMV = np.load(os.path.join(results,prefix + "v_numdORM_dq.npy"))
 dORMH = np.load(os.path.join(results,prefix + "h_numdORM_dq.npy"))
@@ -104,7 +105,6 @@ dORMH = np.load(os.path.join(results,prefix + "h_numdORM_dq.npy"))
 ###### Example calculating the dORM_dq with thin and thick elements!
 cORM = AnaORM.AnaORM(ring,"v" ,ind)
 cORM.assign_optics()
-#cORM.quad.correct_strength()
 cORM.bpm.broadcasters(1, 3)
 cORM.cor.broadcasters(2, 3)
 cORM.quad.broadcasters(0, 3)
@@ -121,9 +121,26 @@ cORM.cor.broadcasters(2, 4)
 cORM.quad.broadcasters(0, 4)
 cORM.dip.broadcasters(3, 4)
 
-thickh = np.sum(cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad),axis=3 ) + cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.quad, cORM.dip)
+thickh = np.sum(cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad),axis=3 ) #+ cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.quad, cORM.dip)
 ##########################################################
 
 plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
 
+cORM = AnaORM.AnaORM(ring,"v", ind)
+cORM.assign_optics()
+cORM.bpm.broadcasters(0, 2)
+cORM.cor.broadcasters(1, 2)
+aaORMV = cORM.Rab_thick2_(cORM.bpm, cORM.cor)
+
+aaORMV2 = cORM.Rab_thick2_disp(cORM.bpm, cORM.cor)
+
+sORMV = numerical.dORM_dq_semi(ring, ind, 1e-5, "v")
+sORMH = numerical.dORM_dq_semi(ring, ind, 1e-5, "h")
+
+plot_utils.plot_both_Zeus(dORMV, dORMH, sORMV, sORMH)
+"""
+RespV = at.latticetools.OrbitResponseMatrix(ring, "v", ind["bpm"], ind["cor"]["v"])
+RespV.build_tracking() # FIX: build_tracking returns None
+aanumORMV = RespV.response
+"""
 

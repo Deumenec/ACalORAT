@@ -34,11 +34,11 @@ if not os.path.exists(SAVE):
     
 lattice_file   = 'ring_a2.mat' #Read ALBA II lattice ring_a2.mat or THERING.mat to read the ALBA one
 results        = 'A2' #A1 for the ALBA lattice and A2 for the ALBAII lattice and CFDA2
-step           =  1e-4
+step           =  1e-5
 
 p              ={"lin_all"        :  True,  #To turn off higher order multipoles
                  "max_ind"        :  2,      #Cutoff index in polynomB, simplifies the ring for certain calculations
-                 "calculate"      :  True}
+                 "calculate"      :  False}
 
     
 ###############################################################################
@@ -125,7 +125,7 @@ cORM.allQuad.broadcasters(0,3)
 #Terms for the energy perturbation:    
 
 cORM.add_element("bpmh", ind["bpm"], "h")
-cORM.add_element("diph", ind["dip"], "h") #Adds correctors in the horizontal direction.
+cORM.add_element("diph", ind["dip"], "h") 
 cORM.diph.average()
 cORM.add_element("corh", ind["cor"]["h"], "h")
 
@@ -155,7 +155,7 @@ c0_av = np.average(constants0, axis = (1,2))
 c0_dv = np.std(constants0, axis = (1,2))
 
 constants1 = (num_dORM_dqV-Aana_dORM_dCFDV00[0:26])/dRijdEnergy
-c1_av = np.average(constants1, axis = (1,2))
+c1_av = np.average(constants1, axis = (1,2))# /( cORM.diph.Bend[0:26]/(cORM.diph.K[0:26]*cORM.diph.Length[0:26]))/2
 c1_dv = np.std(constants1, axis = (1,2))
 
 #Observem com utilitzant aquests canvis d'energia numèrics, podem aconseguir estimacions molt bones!
@@ -168,18 +168,19 @@ optics = at.get_optics(ring, refpts=range(len(ring)))
 
 all_disp = optics[2]["dispersion"]
 av_disp =np.array(numerical.compute_average_dispersion(ring, ind["cor"]["v"], all_disp))
+av_disp_dip =np.array(numerical.compute_average_dispersion(ring, ind["dip"], all_disp))
 
 #av_disp = all_disp[ ind["cor"]["v"], 0]
 #av_disp = np.zeros(len(ind["cor"]["v"]))
 mcf_val = numerical.get_mcf(ring)
-num_energy = -np.sum(dKicksH_dCFD * av_disp[None, :], axis = 1)/(mcf_val*ring.circumference) - dFreq_dCFD/ (mcf_val * ring.get_rf_frequency())
+num_energy =  dFreq_dCFD/ (mcf_val * ring.get_rf_frequency()) - av_disp_dip[0:26]*cORM.diph.Bend[0:26]/(cORM.diph.K[0:26]*cORM.diph.Length[0:26])
 
 ana_energy = delta_dk
 
-plt.plot(-energy, color = "red", label = "Energia numèrica")
+plt.plot(energy, color = "red", label = "Energia numèrica")
 plt.plot(num_energy, color = "blue", label = "Estimació energia numèrica") 
-plt.plot(c1_av, color = "orange", label = "Optimal Energy")  
-plt.plot(ana_energy, color = "green", label = "Energia analítica")
+#plt.plot(c1_av, color = "orange", label = "Optimal Energy")  
+plt.plot(ana_energy/2, color = "green", label = "Energia analítica")
 
 plt.legend()
 plt.show()

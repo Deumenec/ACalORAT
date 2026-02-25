@@ -249,11 +249,11 @@ def kick_cor(ring , ind_bpm, ind_cor, threshold, original_orbit):
     applyCorrections(ring, ind_cor["v"], -t_kicks["v"], "v")
     return t_kicks, orbit
 
-def Cor_SVD_cor(ring, ind, threshold, original_orbit, ORMH, ORMV, recalc_step=5):
+def Cor_SVD_cor(ring, ind, threshold, original_orbit, ORMH, ORMV, recalc_step=10):
     """
     Corrects orbit using Average Dispersion for frequency feedback.
     """
-    max_steps = 15
+    max_steps = 30
     local_ORMH = ORMH
     local_ORMV = ORMV
     
@@ -337,7 +337,7 @@ def Cor_SVD_cor(ring, ind, threshold, original_orbit, ORMH, ORMV, recalc_step=5)
         # We use average dispersion here too for consistency
         denom = np.sum(avg_disp_h_cor * quotient)
         
-        if abs(denom) < 1e-12:
+        if abs(denom) < 1e-15:
             d_ring_freq = 0.0
         else:
             d_ring_freq = -sum_kicks * mcf_val * ring_freq / denom
@@ -518,9 +518,9 @@ def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
         t_df = 0.0
 
         if method == "Cor_SVD":
-            t_kicks, t_df, _   = Cor_SVD_cor(local_ring, ind, 1e-9, closed_orbit, ORMH, ORMV) 
+            t_kicks, t_df, _   = Cor_SVD_cor(local_ring, ind, 1e-12, closed_orbit, ORMH, ORMV) 
         elif method == "Full_SVD":
-            t_kicks, t_df, _   = Full_SVD_cor(local_ring, ind, 1e-9, closed_orbit) 
+            t_kicks, t_df, _   = Full_SVD_cor(local_ring, ind, 1e-12, closed_orbit) 
         
         # --- COMPUTE RESPONSE MATRIX ---
         Resp_localH = at.latticetools.OrbitResponseMatrix(

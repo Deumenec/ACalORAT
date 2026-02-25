@@ -475,18 +475,18 @@ class AnaORM:
         
         
         # 4. Energy Sensitivity Formula Logic
-        R_inv = np.linalg.pinv(np.squeeze(Rnm))[:, None, :] 
+        R_inv = np.linalg.pinv(np.squeeze(Rnm))[:, :, None] 
         
         
-        num = 1#np.sum(eta_m*R_inv*Rnk, axis = (0,1))
-        denom = 1#np.sum(eta_m)
+        num = np.squeeze( np.sum(eta_m[None, : , None]*R_inv*Rnk, axis = (0,1)) )
+        denom = np.squeeze( np.sum(eta_m*R_inv*eta_n) )
 
         # 5. Build d_delta/d_qk (BPM x CFD) -> (176 x 208)
         term1 = eta_k / (self.mcf * self.circumference)
         term2 = (num / denom)
         
         # Sensitivity d_delta/dqk (176, 208)
-        d_delta_dqk = (term1) * (Ek.Bend / Ek.K)
+        d_delta_dqk = (term1 + term2) * (Ek.Bend / (Ek.K))
 
         return d_delta_dqk
     

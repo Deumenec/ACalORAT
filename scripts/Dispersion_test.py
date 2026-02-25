@@ -9,19 +9,27 @@ Test to check if orbit displacement in BPMs is proportional to dispersion
 
 import os
 import numpy as np
+from pathlib import Path
 import at
 import time
 import copy
 
-import numerical
-import read
-import AnaORM
-import plot_utils
-import math_utils
+from ACalORAT import numerical
+from ACalORAT import read
+from ACalORAT import AnaORM
+from ACalORAT import plot_utils
+from ACalORAT import math_utils
+
 import matplotlib.pyplot as plt
 
-#os.chdir('Z:\Projectes\AlbaThick') #Set my working directory!
-#os.chdir('/Users/deumenec/Documents/Uni/9é semestre/ALBA/Teoria/AlbaThick') #Set my working directory!
+ROOT = Path(__file__).resolve().parent.parent
+
+SAVE = ROOT / "outputs" / "ALBAII_CFD_no_sext"
+
+os.chdir(ROOT)
+if not os.path.exists(SAVE):
+    os.mkdir(SAVE)
+
 
 ###############################################################################
 # Parameters to pass for the calculations
@@ -36,7 +44,6 @@ def get_mcf(ring):
 
     
 lattice_file   = 'ring_a2.mat' #Read ALBA II lattice ring_a2.mat or THERING.mat to read the ALBA one
-lattice_folder = 'lattices' #Important quan treballis amb aquests!
 results        = 'A2' #A1 for the ALBA lattice and A2 for the ALBAII lattice and CFDA2
 direction      = 'v' #v: vertical h: horizontal (SI NOMÉS ES FA EL CÀLCUL D'UNA)
 step_exp       =  3
@@ -54,21 +61,21 @@ calc_dCFD      =  True
 # Reading the lattice parameters
 ###############################################################################
 
-lattice_path = os.path.join(lattice_folder, lattice_file)
+lattice_path = ROOT / "data" /lattice_file
 ring, ind = read.ALBAII(lattice_path)
 
 #Initial values
 val_mcf = get_mcf(ring)
 optics = at.get_optics(ring, refpts = range(len(ring)))[2]
-disps = np.array([optics["dispersion"][i][0] for i in range(len(ring))])[ind_bpm]
-c_orbit0 = at.find_orbit6(ring, refpts=ind_bpm)[1] 
+disps = np.array([optics["dispersion"][i][0] for i in range(len(ring))])[ind["bpm"]]
+c_orbit0 = at.find_orbit6(ring, refpts=ind["bpm"])[1] 
 
 #Change ring parameters
 ring_freq = ring.get_rf_frequency()
 ring.set_cavity(Frequency=ring_freq+step)
 
 #Get new orbit
-c_orbit1 = at.find_orbit6(ring, refpts=ind_bpm)[1] 
+c_orbit1 = at.find_orbit6(ring, refpts=ind["bpm"])[1] 
 
 #Calculate derivative with only the horizontal displacement
 x0 = np.array([i[0] for i in c_orbit0])
@@ -76,13 +83,9 @@ x1 = np.array([i[0] for i in c_orbit1])
 
 disp_num = - (val_mcf*ring_freq )*(x1-x0)/step 
 
-def dispersion(ring):
-    #Calculates dispersion in bpms
-    all_optics = at.get_optics(ring, refpts = ind_bpm)
-    return np.array([i[0] for i in all_optics[2]["dispersion"]])
 
 ###########Dispersion test in bpms######################
-cORM = AnaORM.AnaORM(ring,"h" ,ind_bpm, ind_cor["h"], ind_quad, ind_dip, np.array([]))
+cORM = AnaORM.AnaORM(ring,"h" ,ind)
 cORM.assign_optics()
 cORM.dip.correct_entrance() #Already correcting for the hef
 cORM.bpm.broadcasters(0, 2)

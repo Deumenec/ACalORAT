@@ -180,7 +180,7 @@ ana_energy = delta_dk
 plt.plot(energy, color = "red", label = "Energia numèrica")
 plt.plot(num_energy, color = "blue", label = "Estimació energia numèrica") 
 #plt.plot(c1_av, color = "orange", label = "Optimal Energy")  
-plt.plot(ana_energy/2, color = "green", label = "Energia analítica")
+plt.plot(ana_energy, color = "green", label = "Energia analítica")
 
 plt.legend()
 plt.show()

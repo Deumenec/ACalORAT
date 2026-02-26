@@ -78,13 +78,17 @@ class Elements:
         self.K = self.K/(1+deviations)
         
     def average(self):
-        """Computes the average of the optical functions inside elements by slicing and propagating inside, it may be useful for
+        """Computes the average of the dispersion inside elements by slicing and propagating inside, it may be useful for
         some elements to be considered thin
         """
-        k_total = self.K+(self.Bend/self.Length)**2 #Effective K value
-        phi = np.sqrt(k_total)*self.Length
-        self.avDispersion = self.dispersion *np.sin(phi)/phi + self.dispersionp/(k_total*self.Length)*(1-np.cos(phi))+self.Bend/(self.Length*k_total)*(1-np.sin(phi)/phi)
-        
+        if hasattr(self, "Bend"):
+            k_total = self.K+(self.Bend/self.Length)**2 #Effective K value
+            phi = np.sqrt(k_total)*self.Length
+            self.avDispersion = self.dispersion *np.sin(phi)/phi + self.dispersionp/(k_total*self.Length)*(1-np.cos(phi))+self.Bend/(self.Length*k_total)*(1-np.sin(phi)/phi)
+        if not hasattr(self, "Bend"):
+            k_total = self.K
+            phi = np.sqrt(k_total)*self.Length
+            self.avDispersion = self.dispersion + self.dispersionp*self.Length/2
     def broadcasters(self, axis, ndim):
         """
         Prepares variables in Element for broadcasting with numpy functions placing them
@@ -463,6 +467,8 @@ class AnaORM:
 
         # 2. Extract Optics
         eta_n = Ei.dispersion        # (176,)
+        if not hasattr(Ej, 'avDispersion'):
+            Ej.average()
         eta_m = Ej.dispersion        # (176,)
         if not hasattr(Ek, 'avDispersion'):
             Ek.average()
@@ -471,7 +477,6 @@ class AnaORM:
         # 3. Compute 2D Matrices
         Rnm = self.Rab_thick2_(Ei, Ej)
         Rnk = self.Rab_thick2_(Ei, Ek)
-        
         
         
         # 4. Energy Sensitivity Formula Logic
@@ -490,7 +495,15 @@ class AnaORM:
 
         return d_delta_dqk
     
-    
+    def dx_sex_dCFD(self, Ei: Elements, Ej: Elements, Ek: Elements, Es: Elements):
+        """
+        Uses: and calculates the derivative of the energy with respect to a change in a given CFD
+        Ei: bpms in horizontal
+        Ej: corectors in horizontal
+        Ek: CFD in horizontal
+        dRijdEnergy: in axis 0 and 1
+        """
+        
     def Rij_disp_term(self, Ei : Elements, Ej : Elements, Ed : Elements):
         """Calculates the dispersion caused at the entrance of the ith element
         caused by the El dipoles 

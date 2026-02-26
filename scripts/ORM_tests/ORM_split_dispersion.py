@@ -21,6 +21,8 @@ from ACalORAT import plot_utils
 from ACalORAT import ana_utils
 from ACalORAT import math_utils
 
+#Comprovem com la formula per la mitjana de la dispersió funciona perfecte 
+
 CALC = True
 spl = 100 #Number of times the correctors are split
 

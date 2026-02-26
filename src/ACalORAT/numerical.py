@@ -249,7 +249,7 @@ def kick_cor(ring , ind_bpm, ind_cor, threshold, original_orbit):
     applyCorrections(ring, ind_cor["v"], -t_kicks["v"], "v")
     return t_kicks, orbit
 
-def Cor_SVD_cor(ring, ind, threshold, original_orbit, ORMH, ORMV, recalc_step=10):
+def Cor_SVD_cor(ring, ind, threshold, original_orbit, ORMH, ORMV, recalc_step=12):
     """
     Corrects orbit using Average Dispersion for frequency feedback.
     """
@@ -372,111 +372,6 @@ def Cor_SVD_cor(ring, ind, threshold, original_orbit, ORMH, ORMV, recalc_step=10
     return t_kicks, t_d_ring_freq, orbit
 
 
-def Full_SVD_cor(ring, ind_bpm, ind_cor, threshold, original_orbit):
-    """
-    Uses Extended SVD to correct orbit WITH correctors and RF simultaneously.
-    It builds an augmented matrix [ORM_h | Dispersion_h] to solve for 
-    both kicks and momentum deviation (delta) in one step.
-    """
-    if v: print("hii")
-    max_steps = 10
-    
-    # Acumulated changes
-    t_kicks = {"h": np.zeros(len(ind_cor["h"])), "v": np.zeros(len(ind_cor["v"]))}
-    t_d_ring_freq = 0.0
-    
-    # Initial Orbit check
-    orbit = at.find_orbit6(ring, refpts=ind_bpm)[1]
-    # Difference from target orbit
-    dxs = np.array([orbit[i][0] - original_orbit[i][0] for i in range(len(orbit))])
-    dys = np.array([orbit[i][2] - original_orbit[i][2] for i in range(len(orbit))])
-    
-    difference = rms(dxs) + rms(dys)
-    if difference < threshold:
-        if v: print("No correction was needed")
-        return t_kicks, t_d_ring_freq, orbit
-
-    # --- Iteration Loop ---
-    while max_steps > 0:
-        max_steps -= 1
-        
-        # 1. Update Physics (Optics + ORM)
-        optics = at.get_optics(ring, refpts=range(len(ring)))[2]
-        
-        # Get Dispersion at BPM locations
-        disp_h = np.array([optics["dispersion"][i][0] for i in range(len(ring))])[ind_bpm]
-        
-        # 2. Build Response Matrices
-        Resp_H = at.latticetools.OrbitResponseMatrix(ring, "h", ind_bpm, ind_cor["h"])
-        Resp_H.build_tracking()
-        ORMH = Resp_H.response
-        Resp_V = at.latticetools.OrbitResponseMatrix(ring, "v", ind_bpm, ind_cor["v"])
-        Resp_V.build_tracking()
-        ORMV = Resp_V.response
-
-        # We append Dispersion as the last column of the matrix ORMH
-        # Matrix shape becomes (N_BPMs, N_Cors + 1)
-        # Reshape dispersion to be a column vector (N, 1)
-        col_disp = disp_h.reshape(-1, 1)
-        M_aug = np.hstack([ORMH, col_disp])
-        
-        # Horizontal Solve (Returns kicks AND energy deviation)
-        sol_h, *_ = np.linalg.lstsq(M_aug, dxs, rcond=None)
-        
-        # Vertical Solve (Standard SVD)
-        kicks_v, *_ = np.linalg.lstsq(ORMV, dys, rcond=None)
-
-        # 5. Extract Results
-        # The last element of sol_h is the required dp/p (delta)
-        # The rest are the corrector kicks
-        kicks_h = sol_h[:-1]
-        delta_val = sol_h[-1]
-
-        # 6. Negative Feedback (Invert the sign to correct)
-        kicks_h = -kicks_h
-        kicks_v = -kicks_v
-        delta_val = -delta_val 
-
-        # 7. Convert Delta to Frequency
-        # df = - f_rf * mcf * delta
-        ring_freq = ring.get_rf_frequency()
-        mcf_val = get_mcf(ring)
-        d_freq = - ring_freq * mcf_val * delta_val
-
-        # 8. Apply Corrections
-        
-        # Accumulate
-        t_kicks["h"] += kicks_h
-        t_kicks["v"] += kicks_v
-        t_d_ring_freq += d_freq
-        sum_kicks = np.sum(t_kicks["h"])
-        if v: print(f"Step {10-max_steps} | d_freq_total: {t_d_ring_freq} | Sum Kicks: {sum_kicks} | dxs:  ")
-
-        # Apply to Ring
-        applyCorrections(ring, ind_cor["h"], kicks_h, "h")
-        applyCorrections(ring, ind_cor["v"], kicks_v, "v")
-        
-        new_ring_freq = ring_freq + d_freq
-        ring.set_cavity(Frequency=new_ring_freq)
-
-        # 9. Check Convergence
-        orbit = at.find_orbit6(ring, refpts=ind_bpm)[1]
-        dxs = np.array([orbit[i][0] - original_orbit[i][0] for i in range(len(orbit))])
-        dys = np.array([orbit[i][2] - original_orbit[i][2] for i in range(len(orbit))])
-        
-        difference = rms(dxs) + rms(dys)
-        
-        if v: print(f"Step {10-max_steps} | d_freq_total: {t_d_ring_freq} | Sum Kicks: {sum_kicks} | diff: {difference} ")
-        if v: print(f"  Orbit Diff: {difference:.2e}")
-        
-        if difference < threshold:
-            if v: print("Convergence Reached.")
-            return t_kicks, t_d_ring_freq, orbit
-
-    # End of Loop
-    if v: print("Iteration did not converge within max steps")
-    return t_kicks, t_d_ring_freq, orbit
-
 def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
     """
     Computes derivatives using Central Difference (f(x+h) - f(x-h)) / 2h.
@@ -520,7 +415,7 @@ def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
         if method == "Cor_SVD":
             t_kicks, t_df, _   = Cor_SVD_cor(local_ring, ind, 1e-12, closed_orbit, ORMH, ORMV) 
         elif method == "Full_SVD":
-            t_kicks, t_df, _   = Full_SVD_cor(local_ring, ind, 1e-12, closed_orbit) 
+            t_kicks, t_df, _   = Full_SVD_cor(local_ring, ind, 1e-12, closed_orbit, ORMH, ORMV) 
         
         # --- COMPUTE RESPONSE MATRIX ---
         Resp_localH = at.latticetools.OrbitResponseMatrix(
@@ -536,6 +431,11 @@ def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
         new_orbit = at.find_orbit(local_ring, refpts=range(len(local_ring)))[1]
         x_sex = np.array([i[0] for i in new_orbit])[ind["sex"]]
         energy = np.average(new_orbit[:,4])
+        
+        disp = at.get_optics(ring, refpts=range(len(ring)))[2]["dispersion"]
+        avdisp = compute_average_dispersion(ring, ind["cor"]["h"],disp )
+        cond = np.sum(t_kicks["h"] * avdisp)
+        print(f"AFTER CORRECTION, THE ENERGY CHANGE IN CORRECTORS IS: {cond}")
         return {
             "H": Resp_localH.response,
             "V": Resp_localV.response,
@@ -694,4 +594,93 @@ def quickdORMdEnergy(ring, ind, step=0.1):
     
 
     return (ORMVp - ORMVn) / delta_total
+
+
+
+def Full_SVD_cor(ring, ind, threshold, original_orbit, ORMH, ORMV, recalc_step=15):
+    """
+    Uses Extended SVD to correct orbit WITH correctors and RF simultaneously.
+    It builds an augmented matrix [ORM_h | Dispersion_h] to solve for 
+    both kicks and momentum deviation (delta) in one step.
+    """
+    if v: print("Starting Full Augmented SVD Correction...")
+    max_steps = 30
     
+    ind_bpm = ind["bpm"]
+    ind_cor = ind["cor"]
+    
+    # Acumulated changes
+    t_kicks = {"h": np.zeros(len(ind_cor["h"])), "v": np.zeros(len(ind_cor["v"]))}
+    t_d_ring_freq = 0.0
+    
+    ring_freq = ring.get_rf_frequency()
+    mcf_val = get_mcf(ring)
+    # L0 = ring.circumference (No longer needed)
+
+    for step in range(1, max_steps + 1):
+        # 1. Check Orbit
+        orbit = at.find_orbit6(ring, refpts=range(len(ring)))[1]
+        
+        bpm_orbit = orbit[ind_bpm]
+        dxs = np.array([bpm_orbit[i][0] - original_orbit[ind_bpm[i]][0] for i in range(len(bpm_orbit))])
+        dys = np.array([bpm_orbit[i][2] - original_orbit[ind_bpm[i]][2] for i in range(len(bpm_orbit))])
+        
+        difference = rms(dxs) + rms(dys)
+        if difference < threshold:
+            if v: print(f"Convergence Reached at step {step-1}.")
+            return t_kicks, t_d_ring_freq, orbit
+
+        # 2. Update Physics
+        optics = at.get_optics(ring, refpts=range(len(ring)))[2]
+        all_disp = optics["dispersion"]
+        disp_h_bpm = all_disp[ind_bpm, 0] # Point dispersion at BPMs
+        
+        # 3. Build Response Matrices (Using your class)
+        if step == recalc_step:
+            Resp_H = at.latticetools.OrbitResponseMatrix(ring, "h", ind_bpm, ind_cor["h"])
+            Resp_H.build_tracking(tol=1e-12, max_iterations=100)
+            ORMH = Resp_H.response
+            
+            Resp_V = at.latticetools.OrbitResponseMatrix(ring, "v", ind_bpm, ind_cor["v"])
+            Resp_V.build_tracking(tol=1e-12, max_iterations=100)
+            ORMV = Resp_V.response
+
+        # 4. Augment Matrix
+        col_disp = disp_h_bpm.reshape(-1, 1)
+        M_aug = np.hstack([ORMH, col_disp])
+        
+        # 5. Solve Augmented SVD
+        sol_h, *_ = np.linalg.lstsq(M_aug, dxs, rcond=None)
+        kicks_v, *_ = np.linalg.lstsq(ORMV, dys, rcond=None)
+
+        # Extract Raw values
+        kicks_h_raw = sol_h[:-1]
+        delta_raw = sol_h[-1]
+
+        # 6. Negative Feedback
+        kicks_h = -kicks_h_raw
+        kicks_v = -kicks_v
+        delta_target = -delta_raw 
+
+        # 7. Total Frequency Shift
+        # The 6D ORMH matrix already includes the path-length shifts from steerers.
+        # We ONLY need to shift the RF to satisfy the EXTRA delta requested by the SVD.
+        d_freq = -ring_freq * mcf_val * delta_target
+
+        # 8. Apply Corrections
+        t_kicks["h"] += kicks_h
+        t_kicks["v"] += kicks_v
+        t_d_ring_freq += d_freq
+
+        applyCorrections(ring, ind_cor["h"], kicks_h, "h")
+        applyCorrections(ring, ind_cor["v"], kicks_v, "v")
+        
+        new_ring_freq = ring_freq + d_freq
+        ring.set_cavity(Frequency=new_ring_freq)
+        ring_freq = new_ring_freq # Update for next loop iteration
+
+        sum_kicks = np.sum(t_kicks["h"])
+        if v: print(f"Step {step} | dFreq step: {d_freq:.4e} | Sum Kicks: {sum_kicks:.4e} | diff: {difference:.2e}")
+
+    if v: print("Iteration did not converge within max steps")
+    return t_kicks, t_d_ring_freq, orbit

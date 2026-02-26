@@ -34,7 +34,7 @@ if not os.path.exists(SAVE):
     
 lattice_file   = 'ring_a2.mat' #Read ALBA II lattice ring_a2.mat or THERING.mat to read the ALBA one
 results        = 'A2' #A1 for the ALBA lattice and A2 for the ALBAII lattice and CFDA2
-step           =  1e-5
+step           =  1e-4
 
 p              ={"lin_all"        :  True,  #To turn off higher order multipoles
                  "max_ind"        :  2,      #Cutoff index in polynomB, simplifies the ring for certain calculations
@@ -180,10 +180,13 @@ ana_energy = delta_dk
 plt.plot(energy, color = "red", label = "Energia numèrica")
 plt.plot(num_energy, color = "blue", label = "Estimació energia numèrica") 
 #plt.plot(c1_av, color = "orange", label = "Optimal Energy")  
-plt.plot(ana_energy, color = "green", label = "Energia analítica")
-
+plt.plot(ana_energy/2, color = "green", label = "Energia analítica")
 plt.legend()
 plt.show()
+
+#Test to check if the numerical orbit feedback condition is satisfied:
+    
+energy_test = np.sum(cORM.corh.avDispersion[None, :]*dKicksH_dCFD, axis =1)
 
 
 

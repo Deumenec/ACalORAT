@@ -18,7 +18,7 @@ dir_dict = {"h": 0, "v": 1}
 
 #GLOBAL VARIABLE TO ACTIVATE THE VERBOSE MODE
 v = True
-    
+d = False
 def get_mcf(ring):
     if (ring.is_6d==True):
         ring.disable_6d()
@@ -328,7 +328,7 @@ def Cor_SVD_cor(ring, ind, threshold, original_orbit, ORMH, ORMV, recalc_step=12
         sum_kicks = np.sum(kicks_h * avg_disp_h_cor)
         
         # 2. Dispersion Drive Pattern
-        quotient, *_ = np.linalg.lstsq(local_ORMH, disp_h_bpm, rcond=None)
+        quotient, *_ = np.linalg.lstsq(local_ORMH, disp_h_bpm, rcond=1e-8)
         
         ring_freq = ring.get_rf_frequency()
         mcf_val = get_mcf(ring)
@@ -353,13 +353,16 @@ def Cor_SVD_cor(ring, ind, threshold, original_orbit, ORMH, ORMV, recalc_step=12
         t_kicks["h"] += kicks2
         
         # --- E. UPDATE OPTICS & CHECK ---
-        optics_data = at.get_optics(ring, refpts=range(len(ring)))
-        orbit = optics_data[2]["closed_orbit"]
-        all_disp = optics_data[2]['dispersion'] # Update for next loop
+        ##########################
+        # Testing without changing the optics!
+        ##########################
+        #optics_data = at.get_optics(ring, refpts=range(len(ring)))
+        orbit = at.find_orbit6(ring, refpts=range(len(ring)))[1]
+        #all_disp = optics_data[2]['dispersion'] # Update for next loop
         
         bpm_orbit = orbit[ind["bpm"]]
-        dxs = np.array([bpm_orbit[i][0] - original_orbit[i][0] for i in range(len(bpm_orbit))])
-        dys = np.array([bpm_orbit[i][2] - original_orbit[i][2] for i in range(len(bpm_orbit))])
+        dxs = np.array([bpm_orbit[i][0] - original_orbit[ind["bpm"][i]][0] for i in range(len(bpm_orbit))])
+        dys = np.array([bpm_orbit[i][2] - original_orbit[ind["bpm"][i]][2] for i in range(len(bpm_orbit))])
         
         diff = rms(dxs) + rms(dys)
         if v: print(f"Step {step} | dFreq: {t_d_ring_freq} | Sum Kicks: {sum_kicks} | diff: {diff} ")
@@ -432,8 +435,8 @@ def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
         x_sex = np.array([i[0] for i in new_orbit])[ind["sex"]]
         energy = np.average(new_orbit[:,4])
         
-        disp = at.get_optics(ring, refpts=range(len(ring)))[2]["dispersion"]
-        avdisp = compute_average_dispersion(ring, ind["cor"]["h"],disp )
+        disp = at.get_optics(local_ring, refpts=range(len(ring)))[2]["dispersion"]
+        avdisp = compute_average_dispersion(local_ring, ind["cor"]["h"],disp )
         cond = np.sum(t_kicks["h"] * avdisp)
         print(f"AFTER CORRECTION, THE ENERGY CHANGE IN CORRECTORS IS: {cond}")
         return {
@@ -481,15 +484,21 @@ def dORM_dCFD(ring, ind ,step, num=None, multithread=False, method="Cor_SVD"):
 
     # Initialize Base Response Matrices to get shapes
     print("Calculating Base ORMs...")
-    RespH = at.latticetools.OrbitResponseMatrix(ring, "h", ind["bpm"], ind["cor"]["h"])
-    RespH.build_tracking() # FIX: build_tracking returns None, modifies in place
-    ORMH = RespH.response 
-
-    RespV = at.latticetools.OrbitResponseMatrix(ring, "v", ind["bpm"], ind["cor"]["v"])
-    RespV.build_tracking() # FIX: build_tracking returns None
-    ORMV = RespV.response
-    closed_orbit = at.find_orbit6(ring, refpts=range(len(ring)))[1] 
+    if not d:
+        RespH = at.latticetools.OrbitResponseMatrix(ring, "h", ind["bpm"], ind["cor"]["h"])
+        RespH.build_tracking() # FIX: build_tracking returns None, modifies in place
+        ORMH = RespH.response 
     
+        RespV = at.latticetools.OrbitResponseMatrix(ring, "v", ind["bpm"], ind["cor"]["v"])
+        RespV.build_tracking() # FIX: build_tracking returns None
+        ORMV = RespV.response
+        np.save("ORMH", ORMH)
+        np.save("ORMV", ORMH)
+    else:
+        ORMH = np.load("ORMH.npy")
+        ORMV = np.load("ORMV.npy")
+    closed_orbit = at.find_orbit6(ring, refpts=range(len(ring)))[1] 
+        
     # 2. Allocate Result Arrays
     # Shapes: [N_CFD, N_BPM, N_COR]
     num_dORM_dqH = np.zeros((n_calcs, *ORMH.shape))
@@ -598,28 +607,25 @@ def quickdORMdEnergy(ring, ind, step=0.1):
 
 
 def Full_SVD_cor(ring, ind, threshold, original_orbit, ORMH, ORMV, recalc_step=15):
-    """
-    Uses Extended SVD to correct orbit WITH correctors and RF simultaneously.
-    It builds an augmented matrix [ORM_h | Dispersion_h] to solve for 
-    both kicks and momentum deviation (delta) in one step.
-    """
-    if v: print("Starting Full Augmented SVD Correction...")
+    if v: print("Starting Constrained Native RF SVD...")
     max_steps = 30
     
     ind_bpm = ind["bpm"]
     ind_cor = ind["cor"]
+    cav_ind = at.get_refpts(ring, at.RFCavity)
     
-    # Acumulated changes
     t_kicks = {"h": np.zeros(len(ind_cor["h"])), "v": np.zeros(len(ind_cor["v"]))}
     t_d_ring_freq = 0.0
-    
     ring_freq = ring.get_rf_frequency()
-    mcf_val = get_mcf(ring)
-    # L0 = ring.circumference (No longer needed)
+    
+    # Weight of the constraint. 
+    # 1e4 forces the solver to respect the constraint above all else.
+    W = 10000.0 
 
     for step in range(1, max_steps + 1):
-        # 1. Check Orbit
-        orbit = at.find_orbit6(ring, refpts=range(len(ring)))[1]
+        optics_data = at.get_optics(ring, refpts=range(len(ring)))
+        orbit = optics_data[2]["closed_orbit"]
+        all_disp = optics_data[2]["dispersion"]
         
         bpm_orbit = orbit[ind_bpm]
         dxs = np.array([bpm_orbit[i][0] - original_orbit[ind_bpm[i]][0] for i in range(len(bpm_orbit))])
@@ -629,45 +635,48 @@ def Full_SVD_cor(ring, ind, threshold, original_orbit, ORMH, ORMV, recalc_step=1
         if difference < threshold:
             if v: print(f"Convergence Reached at step {step-1}.")
             return t_kicks, t_d_ring_freq, orbit
-
-        # 2. Update Physics
-        optics = at.get_optics(ring, refpts=range(len(ring)))[2]
-        all_disp = optics["dispersion"]
-        disp_h_bpm = all_disp[ind_bpm, 0] # Point dispersion at BPMs
         
-        # 3. Build Response Matrices (Using your class)
         if step == recalc_step:
-            Resp_H = at.latticetools.OrbitResponseMatrix(ring, "h", ind_bpm, ind_cor["h"])
+            Resp_H = at.latticetools.OrbitResponseMatrix(
+                ring, "h", bpmrefs=ind_bpm, steerrefs=ind_cor["h"], cavrefs=cav_ind
+            )
             Resp_H.build_tracking(tol=1e-12, max_iterations=100)
             ORMH = Resp_H.response
             
-            Resp_V = at.latticetools.OrbitResponseMatrix(ring, "v", ind_bpm, ind_cor["v"])
+            Resp_V = at.latticetools.OrbitResponseMatrix(
+                ring, "v", bpmrefs=ind_bpm, steerrefs=ind_cor["v"]
+            )
             Resp_V.build_tracking(tol=1e-12, max_iterations=100)
             ORMV = Resp_V.response
 
-        # 4. Augment Matrix
-        col_disp = disp_h_bpm.reshape(-1, 1)
-        M_aug = np.hstack([ORMH, col_disp])
+        # --- APPLY THE DISPERSION CONSTRAINT ---
+        # 1. Calculate average dispersion at correctors
+        avg_disp_h_cor = compute_average_dispersion(ring, ind_cor["h"], all_disp)
         
-        # 5. Solve Augmented SVD
-        sol_h, *_ = np.linalg.lstsq(M_aug, dxs, rcond=None)
+        # 2. Build the constraint row: [eta_1, eta_2, ..., eta_n, 0]
+        # The 0 at the end is for the RF cavity column (it is allowed to change energy)
+        constraint_row = np.zeros(len(ind_cor["h"]) + 1)
+        constraint_row[:-1] = avg_disp_h_cor * W
+        
+        # 3. Augment the ORMH matrix vertically
+        M_aug = np.vstack((ORMH, constraint_row))
+        
+        # 4. Augment the target vector (dxs) with a 0 for the constraint target
+        dxs_aug = np.append(dxs, 0.0)
+
+        # --- SVD SOLVE ---
+        sol_h, *_ = np.linalg.lstsq(M_aug, dxs_aug, rcond=None)
         kicks_v, *_ = np.linalg.lstsq(ORMV, dys, rcond=None)
 
-        # Extract Raw values
-        kicks_h_raw = sol_h[:-1]
-        delta_raw = sol_h[-1]
+        # Extract values
+        kicks_h = -sol_h[:-1] # Correctors
+        d_freq  = -sol_h[-1]  # RF Frequency
+        
+        # Optional: Print the constraint check to prove it works
+        path_length_leak = np.sum(kicks_h * avg_disp_h_cor)
+        if v: print(f"Step {step} | dFreq: {d_freq:.4e} | Path Leak: {path_length_leak:.2e} | diff: {difference:.2e}")
 
-        # 6. Negative Feedback
-        kicks_h = -kicks_h_raw
-        kicks_v = -kicks_v
-        delta_target = -delta_raw 
-
-        # 7. Total Frequency Shift
-        # The 6D ORMH matrix already includes the path-length shifts from steerers.
-        # We ONLY need to shift the RF to satisfy the EXTRA delta requested by the SVD.
-        d_freq = -ring_freq * mcf_val * delta_target
-
-        # 8. Apply Corrections
+        # Apply
         t_kicks["h"] += kicks_h
         t_kicks["v"] += kicks_v
         t_d_ring_freq += d_freq
@@ -677,10 +686,7 @@ def Full_SVD_cor(ring, ind, threshold, original_orbit, ORMH, ORMV, recalc_step=1
         
         new_ring_freq = ring_freq + d_freq
         ring.set_cavity(Frequency=new_ring_freq)
-        ring_freq = new_ring_freq # Update for next loop iteration
-
-        sum_kicks = np.sum(t_kicks["h"])
-        if v: print(f"Step {step} | dFreq step: {d_freq:.4e} | Sum Kicks: {sum_kicks:.4e} | diff: {difference:.2e}")
+        ring_freq = new_ring_freq 
 
     if v: print("Iteration did not converge within max steps")
     return t_kicks, t_d_ring_freq, orbit

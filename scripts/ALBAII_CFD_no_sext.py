@@ -173,20 +173,28 @@ av_disp_dip =np.array(numerical.compute_average_dispersion(ring, ind["dip"], all
 #av_disp = all_disp[ ind["cor"]["v"], 0]
 #av_disp = np.zeros(len(ind["cor"]["v"]))
 mcf_val = numerical.get_mcf(ring)
-num_energy =  dFreq_dCFD/ (mcf_val * ring.get_rf_frequency()) - av_disp_dip[0:26]*cORM.diph.Bend[0:26]/(cORM.diph.K[0:26]*cORM.diph.Length[0:26])
+
 
 ana_energy = delta_dk
+
+# Fixed signs, removed Length, and added mcf_val * ring.circumference to the denominator
+
+num_energy = np.real(-dFreq_dCFD / (mcf_val * ring.get_rf_frequency()) + (cORM.diph.avDispersion * (cORM.diph.Bend / cORM.diph.K))[0:26] / (mcf_val * ring.circumference))
 
 plt.plot(energy, color = "red", label = "Energia numèrica")
 plt.plot(num_energy, color = "blue", label = "Estimació energia numèrica") 
 #plt.plot(c1_av, color = "orange", label = "Optimal Energy")  
-plt.plot(ana_energy/2, color = "green", label = "Energia analítica")
+#plt.plot(ana_energy, color = "green", label = "Energia analítica")
 plt.legend()
 plt.show()
 
 #Test to check if the numerical orbit feedback condition is satisfied:
     
 energy_test = np.sum(cORM.corh.avDispersion[None, :]*dKicksH_dCFD, axis =1)
+energy_test_norm = np.sum(np.abs(cORM.corh.avDispersion[None, :]*dKicksH_dCFD), axis =1)
+
+#Check if activations are being predicted well:
+
 
 
 

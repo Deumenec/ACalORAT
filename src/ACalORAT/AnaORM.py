@@ -454,13 +454,59 @@ class AnaORM:
      
     def dRij_dCFD_energy(self, Ei: Elements, Ej: Elements, Ek: Elements):
         """
-        Uses: and calculates the derivative of the energy with respect to a change in a given CFD
+        Uses and calculates the derivative of the energy with respect to a change in a given CFD
         Ei: bpms in horizontal
         Ej: corectors in horizontal
         Ek: CFD in horizontal
-        dRijdEnergy: in axis 0 and 1
         """
         
+        Ei.broadcasters(0, 3)   #n (BPMs)
+        Ej.broadcasters(1, 3)   #m (Correctors)
+        Ek.broadcasters(2, 3)   #k (CFDs)
+
+        # 1. Extract Optics
+        eta_n = np.squeeze(Ei.dispersion)        
+        if not hasattr(Ej, 'avDispersion'):
+            Ej.average()
+        eta_m = np.squeeze(Ej.avDispersion)     # Fixed: Now actually uses the average!   
+        if not hasattr(Ek, 'avDispersion'):
+            Ek.average()
+        eta_k = np.squeeze(Ek.avDispersion)      
+
+        # 2. Compute 2D Matrices
+        Rnm = np.squeeze(self.Rab_thick2_(Ei, Ej)) # Shape: (N_BPM, M_COR)
+        Rnk = np.squeeze(self.Rab_thick2_(Ei, Ek)) # Shape: (N_BPM, K_CFD)
+        
+        # 3. Geometry factor (Bend / K) -> size K_CFD
+        # Fixed: Removed *Ek.Length to preserve radians / m^-2
+        geometry = Ek.Bend / Ek.K 
+        
+        # 4. Math matching MATLAB exactly using lstsq
+        # MATLAB: hcm0 = (R_nm \ R_nk) * diag(angbq ./ Kbq)
+        invR_Rnk = np.linalg.lstsq(Rnm, Rnk, rcond=None)[0] 
+        hcm0 = invR_Rnk * geometry 
+        
+        # MATLAB: R_nm \ etab
+        invR_etan = np.linalg.lstsq(Rnm, eta_n, rcond=None)[0] 
+        
+        # MATLAB: etaxc * hcm0
+        num = eta_m @ hcm0 
+        
+        # MATLAB: etaxc * (R_nm \ etab)
+        denom = eta_m @ invR_etan 
+        
+        # MATLAB: de_dq = etaxc * hcm0 / (etaxc * (R_nm \ etab))
+        term2 = num / denom 
+        
+        # MATLAB: de1_dip_dq = etaxbq .* (angbq./Kbq) / alph / circ
+        term1 = (eta_k * geometry) / (self.mcf * self.circumference)
+        
+        # MATLAB: de_dq = de_dq + de1_dip_dq
+        d_delta_dqk = term2 + term1
+
+        return d_delta_dqk
+    
+    def activ(self, Ei: Elements, Ej: Elements, Ek: Elements):
         Ei.broadcasters(0, 3)   #n
         Ej.broadcasters(1, 3)   #m
         Ek.broadcasters(2, 3)   #k
@@ -475,25 +521,18 @@ class AnaORM:
         eta_k = Ek.avDispersion      # (208,)
 
         # 3. Compute 2D Matrices
+        
         Rnm = self.Rab_thick2_(Ei, Ej)
         Rnk = self.Rab_thick2_(Ei, Ek)
         
+        # If the method is vertical, Rnm here are horizontal so ve have to swap the sign!
+        if self.dir == "v":
+            Rnm = -self.Rab_thick2_(Ei, Ej)
+            Rnk = -self.Rab_thick2_(Ei, Ek)
         
         # 4. Energy Sensitivity Formula Logic
         R_inv = np.linalg.pinv(np.squeeze(Rnm))[:, :, None] 
-        
-        
-        num = np.squeeze( np.sum(eta_m[None, : , None]*R_inv*Rnk, axis = (0,1)) )
-        denom = np.squeeze( np.sum(eta_m*R_inv*eta_n) )
-
-        # 5. Build d_delta/d_qk (BPM x CFD) -> (176 x 208)
-        term1 = eta_k / (self.mcf * self.circumference)
-        term2 = (num / denom)
-        
-        # Sensitivity d_delta/dqk (176, 208)
-        d_delta_dqk = (term1 + term2) * (Ek.Bend / (Ek.K))
-
-        return d_delta_dqk
+        return
     
     def dx_sex_dCFD(self, Ei: Elements, Ej: Elements, Ek: Elements, Es: Elements):
         """

@@ -37,17 +37,17 @@ results        = 'A2' #A1 for the ALBA lattice and A2 for the ALBAII lattice and
 step           =  1e-4
 
 p              ={"lin_all"        :  True,  #To turn off higher order multipoles
-                 "max_ind"        :  2,      #Cutoff index in polynomB, simplifies the ring for certain calculations
+                 "max_ind"        :  3,      #Cutoff index in polynomB, simplifies the ring for certain calculations
                  "calculate"      :  False}
 
-    
+
 ###############################################################################
 # Reading the lattice parameters
 ###############################################################################
 
 ring, ind = read.ALBAII(ROOT  / "data" / "ring_a2.mat")
 
-
+    
 if p["lin_all"] == True: #DESACTIVA TOTS ELS Sextupols i ordres superiors 
     for element in filter(at.checkattr("PolynomB"), ring):
         #print(element.FamName)
@@ -85,8 +85,8 @@ if  p["calculate"]:
 
 else:
     try:
-        num_dORM_dqH = np.load(SAVE /pathCFD /"num_dORM_dqH.npy")
-        num_dORM_dqV = np.load(SAVE /pathCFD /"num_dORM_dqV.npy")
+        #num_dORM_dqH = np.load(SAVE /pathCFD /"num_dORM_dqH.npy")
+        #num_dORM_dqV = np.load(SAVE /pathCFD /"num_dORM_dqV.npy")
         dFreq_dCFD   = np.load(SAVE /pathCFD /"dFreq_dCFD.npy")
         dKicksH_dCFD = np.load(SAVE /pathCFD /"dKicksH_dCFD.npy")
         dKicksV_dCFD = np.load(SAVE /pathCFD /"dKicksV_dCFD.npy")
@@ -95,18 +95,18 @@ else:
     except:
         raise ImportError("No hi ha respostes calculades")
 
-optics = at.get_optics(ring, refpts = range(len(ring)))[2]
+#optics = at.get_optics(ring, refpts = range(len(ring)))[2]
 
 #Kicktests:
 #Tests if the kicks performed by the numerical calculation respect the dispersion sum condition
 
-corx_disp = optics["dispersion"][ind["cor"]["h"]][:,0]
-cory_disp = optics["dispersion"][ind["cor"]["v"]][:,0]
+#corx_disp = optics["dispersion"][ind["cor"]["h"]][:,0]
+#cory_disp = optics["dispersion"][ind["cor"]["v"]][:,0]
 
 
 
-feedx = np.sum(corx_disp*dKicksH_dCFD, axis = 1)
-feedy = np.sum(cory_disp*dKicksV_dCFD, axis = 1)
+#feedx = np.sum(corx_disp*dKicksH_dCFD, axis = 1)
+#feedy = np.sum(cory_disp*dKicksV_dCFD, axis = 1)
 feedxm = np.sum(dKicksH_dCFD, axis = 1)
 feedym = np.sum(dKicksV_dCFD, axis = 1)
 
@@ -126,42 +126,28 @@ cORM.allQuad.broadcasters(0,3)
 
 cORM.add_element("bpmh", ind["bpm"], "h")
 cORM.add_element("diph", ind["dip"], "h") 
-cORM.diph.average()
 cORM.add_element("corh", ind["cor"]["h"], "h")
 
 #dRijdEnergy_num = numerical.dORMdEnergy(ring, ind)
-dRijdEnergy= cORM.dRij_dEnergy(cORM.bpm, cORM.cor, cORM.allQuad)
-dRijdEnergy_quick = numerical.quickdORMdEnergy(ring, ind)
+#dRijdEnergy= cORM.dRij_dEnergy(cORM.bpm, cORM.cor, cORM.allQuad)
+#dRijdEnergy_quick = numerical.quickdORMdEnergy(ring, ind)
 
 Rij = np.sum( cORM.Rab_thick2_(cORM.bpm, cORM.cor), axis = 0)
 
 #Term corresponding to the quadrupole in CFD with a factor due to the extra change due to change in effective quadrupole because of the change in dipole moment
-Aana_dORM_dCFDV00 = cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.dip)   
-delta_dk = cORM.dRij_dCFD_energy(cORM.bpmh, cORM.corh, cORM.diph)[0:26]
+
+cORM2 = AnaORM.AnaORM(ring, "h", ind)
+cORM2.assign_optics()
+cORM2.bpm.broadcasters(0, 3)
+cORM2.cor.broadcasters(1, 3)
+cORM2.dip.broadcasters(2, 3)
+Rij_bo = np.squeeze(cORM2.Rab_thick2_(cORM2.bpm, cORM2.cor))
+delta_dk = cORM2.dRij_dCFD_energy(cORM2.bpm, cORM2.cor, cORM2.dip)[0:26]
+
+  
+#delta_dk = cORM.dRij_dCFD_energy(cORM.bpmh, cORM.corh, cORM.diph)[0:26]
 #Observem com en aquest cas, la diferència entre la matriu de resposta i la analítica amb només els quadrupols dona matrius proporcionals respecte cada quadrupol          
 
-aatest= num_dORM_dqV-Aana_dORM_dCFDV00[0:26]
-
-#I per exemple:
-
-aatest[0]/aatest[1]
-
-#Es constant 12 exepte els punts on la resposta és molt petita (error numèric) 
-#Això suggereix que el terme "important" que falta és la derivada respecte l'energia.
-#De fet, podem calcular la constant de proporcionalitat per cada CFD, obtenint una estimació de l'energia
-
-constants0 = num_dORM_dqV/dRijdEnergy
-c0_av = np.average(constants0, axis = (1,2))
-c0_dv = np.std(constants0, axis = (1,2))
-
-constants1 = (num_dORM_dqV-Aana_dORM_dCFDV00[0:26])/dRijdEnergy
-c1_av = np.average(constants1, axis = (1,2))# /( cORM.diph.Bend[0:26]/(cORM.diph.K[0:26]*cORM.diph.Length[0:26]))/2
-c1_dv = np.std(constants1, axis = (1,2))
-
-#Observem com utilitzant aquests canvis d'energia numèrics, podem aconseguir estimacions molt bones!
-
-Aana_dORM_dCFDV1 = Aana_dORM_dCFDV00[0:26] + c1_av[:,None, None]*dRijdEnergy[None, :, :]
-    
 #Aquesta gràfica compara la fórmula de l'energia 1. Numèrica, 2. Analítica 3. que minimitza la diferència 4. estimació amb els canvis a l'anell
 
 optics = at.get_optics(ring, refpts=range(len(ring)))
@@ -175,27 +161,24 @@ av_disp_dip =np.array(numerical.compute_average_dispersion(ring, ind["dip"], all
 mcf_val = numerical.get_mcf(ring)
 
 
-ana_energy = delta_dk
+ana_energy = np.real(delta_dk)
 
 # Fixed signs, removed Length, and added mcf_val * ring.circumference to the denominator
 
-num_energy = np.real(-dFreq_dCFD / (mcf_val * ring.get_rf_frequency()) + (cORM.diph.avDispersion * (cORM.diph.Bend / cORM.diph.K))[0:26] / (mcf_val * ring.circumference))
+num_energy = np.real(-dFreq_dCFD / (mcf_val * ring.get_rf_frequency()) + (cORM2.dip.avDispersion * (cORM2.dip.Bend / cORM2.dip.K))[0:26] / (mcf_val * ring.circumference))
 
-plt.plot(energy, color = "red", label = "Energia numèrica")
-plt.plot(num_energy, color = "blue", label = "Estimació energia numèrica") 
-#plt.plot(c1_av, color = "orange", label = "Optimal Energy")  
-#plt.plot(ana_energy, color = "green", label = "Energia analítica")
+
+plt.plot(ana_energy, color = "green", label = "Energia analítica")
+plt.plot(energy, color = "red", label = "Energia numèrica", linestyle = "--")
+
+
+plt.plot(num_energy, color = "blue", label = "Estimació energia numèrica", linestyle = "--") 
 plt.legend()
 plt.show()
 
-#Test to check if the numerical orbit feedback condition is satisfied:
-    
-energy_test = np.sum(cORM.corh.avDispersion[None, :]*dKicksH_dCFD, axis =1)
-energy_test_norm = np.sum(np.abs(cORM.corh.avDispersion[None, :]*dKicksH_dCFD), axis =1)
+#Test to check if the numerical orbit feedback condition 
 
-#Check if activations are being predicted well:
-
-
+#Kicker activation tests: Check if kickers are activating as they are predicted to
 
 
 

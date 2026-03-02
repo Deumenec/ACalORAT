@@ -33,7 +33,7 @@ for i in ind1["cor"]["h"]: ring1[i].KickAngle = np.array([0,0])
 for i in ind1["cor"]["v"]: ring1[i].KickAngle = np.array([0,0])
 
 
-d = "v" # v or h
+d = "h" # v or h
 if CALC:
     ORM_AI_ana  = ana_utils.ORM(ring0, ind0, d)
     ORM_AII_ana = ana_utils.ORM(ring1, ind1, d)

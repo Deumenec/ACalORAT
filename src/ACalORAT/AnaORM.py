@@ -85,10 +85,14 @@ class Elements:
             k_total = self.K+(self.Bend/self.Length)**2 #Effective K value
             phi = np.sqrt(k_total)*self.Length
             self.avDispersion = self.dispersion *np.sin(phi)/phi + self.dispersionp/(k_total*self.Length)*(1-np.cos(phi))+self.Bend/(self.Length*k_total)*(1-np.sin(phi)/phi)
-        if not hasattr(self, "Bend"):
+        if (not hasattr(self, "Bend")) and hasattr(self, "K"):
             k_total = self.K
             phi = np.sqrt(k_total)*self.Length
             self.avDispersion = self.dispersion + self.dispersionp*self.Length/2
+        if (not hasattr(self, "Bend")) and not hasattr(self, "K"):
+            self.avDispersion = self.dispersion + self.dispersionp*self.Length/2
+        if hasattr(self, "_bAxis"):
+            setattr(self, "avDispersion"+"B", broadcast_vector( self.avDispersion ,self._bAxis, self._ndim))
     def broadcasters(self, axis, ndim):
         """
         Prepares variables in Element for broadcasting with numpy functions placing them
@@ -100,6 +104,7 @@ class Elements:
         With B indicating a broadcasting variable.
         """
         self._bAxis = axis #Saving the broadcasting axis
+        self._ndim  = ndim
         variables = [attr for attr in self.__dict__ if not attr.startswith('_')] #Crea broadcasters per totes les variables igual
         for var in variables:
             setattr(self, var+"B", broadcast_vector( getattr(self, var) , axis, ndim))
@@ -183,7 +188,15 @@ class AnaORM:
         """ Returns the dispersion term of the ORM with thick correctors WITHOUT quadrupolar moment inside and no dipole component
         """
         return np.real(-Ea.dispersionB*(Eb.dispersionB+1/2*Eb.dispersionpB*Eb.LengthB))/(self.mcf*self.circumference)
-                 
+    
+    def Rab_thick2_disp_K(self, Ea : Elements, Eb: Elements):
+        """ Returns the dispersion term of the ORM with thick correctors WITH quadrupolar moment inside and no dipole component
+        """
+        if not hasattr(Eb, 'avDispersion'):
+            Eb.average()
+        if not hasattr(Ea, 'avDispersion'):
+            Ea.average()
+        return np.real(-Ea.avDispersionB*(Eb.avDispersionB))/(self.mcf*self.circumference)
     def Ik0(self, Ek: Elements):
         """Integral for element WITH quadrupolar moment """
         return (Ek.betaB+Ek.gammaB/Ek.KB)*Ek.LengthB/2+ (Ek.betaB-Ek.gammaB/Ek.KB)*(np.sin(2*np.sqrt(Ek.KB)*Ek.LengthB))/(4*np.sqrt(Ek.KB))+Ek.alphaB/(2*Ek.KB)*(np.cos(2*np.sqrt(Ek.KB)*Ek.LengthB)-1)
@@ -472,67 +485,66 @@ class AnaORM:
         if not hasattr(Ek, 'avDispersion'):
             Ek.average()
         eta_k = np.squeeze(Ek.avDispersion)      
+        
+        
+        Rnm = np.squeeze(self.Rab_thick2_(Ei, Ej)+ self.Rab_thick2_disp(Ei, Ej)) # Shape: (N_BPM, M_COR)
+        Rnk = np.squeeze(self.Rab_thick2_(Ei, Ek)+ self.Rab_thick2_disp_K(Ei, Ek)) # Shape: (N_BPM, K_CFD)
+        
+        geometry = np.squeeze(Ek.Bend) / np.squeeze(Ek.K)
+        R_inv = np.linalg.pinv(Rnm)
+        hcm0 = (R_inv @ Rnk) * geometry 
+        
+        term1 = (eta_k * geometry) / (self.mcf * self.circumference)
+        
+        term2 = (eta_m @ hcm0) / (eta_m @ R_inv @ eta_n)
+        
+        # Total shift (assuming they are summed positively like in the MATLAB script)
+        d_delta_dqk = term1 + term2
+        
+        return d_delta_dqk
+    
+    def kick_response(self, Ei: Elements, Ej: Elements, Ek: Elements):
+        """
+        Predicts the kicker response due to activation of a CFD,
+        THERE SHOULD BE THE KICKS DUE TO THE FREQUENCY CHANGE AND THE ONES DUE
+        TO THE PURE ORBIT CORRECTION
+        Ei: bpms in horizontal
+        Ej: corectors in horizontal
+        Ek: CFD in horizontal
+        """
+        
+        Ei.broadcasters(0, 3)   #n (BPMs)
+        Ej.broadcasters(1, 3)   #m (Correctors)
+        Ek.broadcasters(2, 3)   #k (CFDs)
 
+        # 1. Extract Optics
+        eta_n = np.squeeze(Ei.dispersion)        
+        if not hasattr(Ej, 'avDispersion'):
+            Ej.average()
+        eta_m = np.squeeze(Ej.avDispersion)     # Fixed: Now actually uses the average!   
+
+        
+        
         # 2. Compute 2D Matrices
         Rnm = np.squeeze(self.Rab_thick2_(Ei, Ej)) # Shape: (N_BPM, M_COR)
         Rnk = np.squeeze(self.Rab_thick2_(Ei, Ek)) # Shape: (N_BPM, K_CFD)
         
-        # 3. Geometry factor (Bend / K) -> size K_CFD
-        # Fixed: Removed *Ek.Length to preserve radians / m^-2
-        geometry = Ek.Bend / Ek.K 
+        if self.dir == "v":
+            Rnm = -Rnm
+            Rnk = -Rnk
+
+        #Beta beating correction
+        R_inv = np.linalg.pinv(Rnm)
+        term1 = R_inv@Rnk
+        #Energy change correction
         
-        # 4. Math matching MATLAB exactly using lstsq
-        # MATLAB: hcm0 = (R_nm \ R_nk) * diag(angbq ./ Kbq)
-        invR_Rnk = np.linalg.lstsq(Rnm, Rnk, rcond=None)[0] 
-        hcm0 = invR_Rnk * geometry 
-        
-        # MATLAB: R_nm \ etab
-        invR_etan = np.linalg.lstsq(Rnm, eta_n, rcond=None)[0] 
-        
-        # MATLAB: etaxc * hcm0
-        num = eta_m @ hcm0 
-        
-        # MATLAB: etaxc * (R_nm \ etab)
-        denom = eta_m @ invR_etan 
-        
-        # MATLAB: de_dq = etaxc * hcm0 / (etaxc * (R_nm \ etab))
-        term2 = num / denom 
+        term2 = eta_m
         
         # MATLAB: de1_dip_dq = etaxbq .* (angbq./Kbq) / alph / circ
-        term1 = (eta_k * geometry) / (self.mcf * self.circumference)
-        
-        # MATLAB: de_dq = de_dq + de1_dip_dq
-        d_delta_dqk = term2 + term1
+
+        dKicksdq = (term1  + term2)* Ek.Bend/(Ek.K) 
 
         return d_delta_dqk
-    
-    def activ(self, Ei: Elements, Ej: Elements, Ek: Elements):
-        Ei.broadcasters(0, 3)   #n
-        Ej.broadcasters(1, 3)   #m
-        Ek.broadcasters(2, 3)   #k
-
-        # 2. Extract Optics
-        eta_n = Ei.dispersion        # (176,)
-        if not hasattr(Ej, 'avDispersion'):
-            Ej.average()
-        eta_m = Ej.dispersion        # (176,)
-        if not hasattr(Ek, 'avDispersion'):
-            Ek.average()
-        eta_k = Ek.avDispersion      # (208,)
-
-        # 3. Compute 2D Matrices
-        
-        Rnm = self.Rab_thick2_(Ei, Ej)
-        Rnk = self.Rab_thick2_(Ei, Ek)
-        
-        # If the method is vertical, Rnm here are horizontal so ve have to swap the sign!
-        if self.dir == "v":
-            Rnm = -self.Rab_thick2_(Ei, Ej)
-            Rnk = -self.Rab_thick2_(Ei, Ek)
-        
-        # 4. Energy Sensitivity Formula Logic
-        R_inv = np.linalg.pinv(np.squeeze(Rnm))[:, :, None] 
-        return
     
     def dx_sex_dCFD(self, Ei: Elements, Ej: Elements, Ek: Elements, Es: Elements):
         """

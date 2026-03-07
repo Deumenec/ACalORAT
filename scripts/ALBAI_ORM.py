@@ -45,9 +45,6 @@ calc_dq        =  True
 
 ring, ind = read.ALBA(ROOT  / "data" / "THERING.mat")
 
-for i in ind["quad"]:
-    if hasattr(ring[i], 'NumIntSteps'):
-        ring[i].NumIntSteps = 100  # Crank this up!
 
 ###############################################################################
 # Configuration of file name for the different options used

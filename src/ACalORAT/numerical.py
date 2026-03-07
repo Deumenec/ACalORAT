@@ -37,17 +37,17 @@ def compute_single_quad(ring, quad, ORM, direction, step, ind_bpm, ind_cor):
 
     #Compute the new ORM
     Resp_local = at.latticetools.OrbitResponseMatrix(
-        local_ring, direction, ind_bpm, ind_cor, steerdelta = 1e-6)
+        local_ring, direction, ind_bpm, ind_cor, steerdelta = 5e-7)
     
-    resp1 = Resp_local.build_tracking(tol=1e-12, max_iterations=100)
+    resp1 = Resp_local.build_tracking(tol=1e-13, max_iterations=150)
     
     local_ring[quad].PolynomB[1] += -2*step
 
     #Compute the new ORM
     Resp_local = at.latticetools.OrbitResponseMatrix(
-        local_ring, direction, ind_bpm, ind_cor, steerdelta = 1e-6)
+        local_ring, direction, ind_bpm, ind_cor, steerdelta = 5e-7)
     
-    resp2 = Resp_local.build_tracking(tol=1e-12, max_iterations=100)
+    resp2 = Resp_local.build_tracking(tol=1e-13, max_iterations=150)
 
 
     return (resp1 - resp2) / (2*step)

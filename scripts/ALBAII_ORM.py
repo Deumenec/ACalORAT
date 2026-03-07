@@ -48,8 +48,6 @@ calc_dq        =  True
 ring, ind = read.ALBAII(ROOT  / "data" / "ring_a2.mat")
 
 
-ind["quad"] = ind["quad"][:20]
-
 
 ###############################################################################
 # Configuration of file name for the different options used
@@ -116,7 +114,7 @@ cORM.quad.broadcasters(0, 3)
 thickv = cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad)
 ##########################################################
 
-"""
+
 ###### Example calculating the dORM_dq with thin and thick elements!
 cORM = AnaORM.AnaORM(ring,"h", ind)
 cORM.assign_optics()
@@ -125,10 +123,9 @@ cORM.dip.correct_entrance()#Corrects optics entrance at dipoles
 cORM.bpm.broadcasters(1, 4)
 cORM.cor.broadcasters(2, 4)
 cORM.quad.broadcasters(0, 4)
-
 thickh = np.sum(cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad),axis=3 ) #+ cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.quad, cORM.dip)
 ##########################################################
-"""
-plot_utils.plot_both_Zeus(dORMV, dORMV, thickv, thickv)
+
+plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
 
 

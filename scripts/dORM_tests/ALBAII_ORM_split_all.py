@@ -35,7 +35,7 @@ results        =  SAVE / 'A2' #A1 for the ALBA lattice and A2 for the ALBAII lat
 direction      = 'v' #v: vertical h: horizontal (SI NOMÉS ES FA EL CÀLCUL D'UNA)
 step_exp       =  4
 step           =  10**(-step_exp)
-read_numerical =  False
+read_numerical =  True
 dispersion     =  True  #Important ja que sino tot petaria amb la cromaticitat! calcular les matrius amb dispersió.
 lin_all        =  False  #To turn off higher order multipoles
 max_ind        =  2     #cutoff index in polynomB
@@ -106,8 +106,8 @@ dORMH = np.load(os.path.join(results,prefix + "h_numdORM_dq.npy"))
 ###############################################################################
 
 
-spl = 6 #Number of times the quadrupoles are split
-
+spl = 3 #Number of times the quadrupoles are split
+spl2 = 3
 def split_el(ring, i, num):
     """Given a ring element i, the ring is modified to have that element 
     split num times handling frontier and length"""
@@ -142,21 +142,13 @@ split_dict = split_fam(ring, ind["cor"]["v"], spl, ind)
 
 ind = read.find_ind_ALBAII(ring)
 
-split_dict = split_fam(ring, ind["quad"], spl, ind)
+split_dict = split_fam(ring, ind["quad"], spl2, ind)
 
 ind = read.find_ind_ALBAII(ring)
 
-#time1 = time.perf_counter()
-###### Example calculating the dORM_dq with thin and thick elements!
-cORM = AnaORM.AnaORM(ring,"v" ,ind)
-cORM.assign_optics()
-cORM.bpm.broadcasters(1, 3)
-cORM.cor.broadcasters(2, 3)
-cORM.quad.broadcasters(0, 3)
 
-thickv = cORM.dRij_dqk_thin(cORM.bpm, cORM.cor, cORM.quad)
 
-thickv_bo0 = np.zeros((97*spl,176, 176))
+thickv_bo0 = np.zeros((97*spl2,176, 176))
 for i in range(176):
     thickv_bo0[:,:,i] = np.sum(thickv[:,:,i*spl:(i+1)*spl], axis = 2)/spl
 ##########################################################
@@ -164,7 +156,7 @@ for i in range(176):
 thickv_bo = np.zeros((97,176, 176))
 
 for i in range(97):
-    thickv_bo[i] = np.sum(thickv_bo0[i*spl:(i+1)*spl], axis = 0)
+    thickv_bo[i] = np.sum(thickv_bo0[i*spl2:(i+1)*spl2], axis = 0)
 ###### Example calculating the dORM_dq with thin and thick elements!
 
 """

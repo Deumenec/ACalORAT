@@ -48,6 +48,7 @@ class Elements:
         if len(ind) == 0: return
         self._ring= ring
         self._ind = ind
+        self._sgn  = sgn
         self.beta = np.array([all_optics[2]["beta"][i][dir_ind] for i in ind], dtype= complex)
         self.alpha= np.array([all_optics[2]["alpha"][i][dir_ind] for i in ind], dtype= complex)
         self.gamma= (self.alpha*self.alpha+1)/self.beta
@@ -61,11 +62,14 @@ class Elements:
         if hasattr(ring[ind[0]], "ExitAngle"): self.ExitAngle = np.array([ring[i].ExitAngle for i in ind], dtype= complex)   
     def correct_entrance(self):
         """ To be called for dipoles to correct the optic functions inside of
-        them after the fringe field and entrance angles. And adjust force.
+        them after entrance angles. And adjust force.
         """
-        self.alpha = self.alpha +self.beta*np.tan(self.EntranceAngle)*(self.Bend/self.Length)
-        #THIS SECOND CORRECTION IS ONLY GOOD IN HORIZONTAL!
-        #self.K = self.K + (self.Bend/self.Length)*(self.Bend/self.Length)
+        #Entrance angle correction to betas
+        if self._sgn == 1 and hasattr(self, "EntranceAngle"):
+            self.alpha += self._sgn *self.beta*np.tan(self.EntranceAngle)*(self.Bend/self.Length)
+        #STRENGTH CORRECTION ONLY FOR HORIZONTAL ONES!
+        if self._sgn == -1 and hasattr(self, "Bend"):
+            self.K = self.K + (self.Bend/self.Length)*(self.Bend/self.Length)
         
     def correct_strength(self):
         """ Calculates the closed orbit off-momentum and uses it to correct the actual effective
@@ -336,6 +340,7 @@ class AnaORM:
     
     def dRij_dqk_thick23(self, Ei : Elements, Ej : Elements, Ek : Elements):
         """Computes the dRij_dqk asssuming thick correctors without quadrupolar component and thick quadrupoles"""
+
         Cij1 = self.Cabn(Ei, Ej, 1)
         Cik2 = self.Cabn(Ei, Ek, 2)
         Cjk2 = self.Cabn(Ej, Ek, 2)
@@ -371,9 +376,10 @@ class AnaORM:
     
     def dRij_dqk_thick23_master(self, Ei : Elements, Ej : Elements, Ek : Elements):
         """Computes the dRij_dqk asssuming thick correctors without quadrupolar component and thick quadrupoles and applyes fringe correctio"""
-        Ei = copy.deepcopy(Ei)
-        Ej = copy.deepcopy(Ej)
+
         Ek = copy.deepcopy(Ek)
+        Ek.correct_entrance()
+        Ek.broadcasters(Ek._bAxis, Ek._ndim)
         Cij1 = self.Cabn(Ei, Ej, 1)
         Cik2 = self.Cabn(Ei, Ek, 2)
         Cjk2 = self.Cabn(Ej, Ek, 2)

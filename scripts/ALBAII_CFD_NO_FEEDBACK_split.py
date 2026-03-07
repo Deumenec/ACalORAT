@@ -104,33 +104,66 @@ dORMV = np.load(os.path.join(results,prefix + "v_numdORM_dq.npy"))
 #Calculating dORM with thick elements and assessing validity
 ###############################################################################
 
+spl = 2 #Number of times the correctors
+
+def split_el(ring, i, num):
+    """Given a ring element i, the ring is modified to have that element 
+    split num times handling frontier and length"""
+    split_el = copy.deepcopy(ring[i])
+    if hasattr(split_el,"Length"):
+        split_el.Length = split_el.Length/num
+    else:
+        raise TypeError(f"Intentant dividir l'element {i} prim")
+    ring.pop(i)
+    if hasattr(split_el,"BendingAngle"):
+        split_el.BendingAngle = split_el.BendingAngle/num
+    for j in range(num): ring.insert(i, copy.deepcopy(split_el), copy_elements=True)
+    for j in range(num-1): 
+        ring[i+j+1].EntranceAngle = 0
+        ring[i+j].ExitAngle = 0        
+    return 
+
+
+def split_fam(ring, ind, num, ind0):
+    """"Split a family of elements in a ring each one in a certain number returns a dict """
+    i = 0
+    ind_c = copy.copy(ind)
+    split_dict = {}
+    while i<len(ind):
+        split_dict.update({ind_c[i]:np.array(range(ind_c[i], ind_c[i]+num))})
+        split_el(ring, ind_c[i], num)
+        ind_c += num-1
+        for fam in ind0:
+            if type(fam) == np.ndarray: 
+                fam += num-1
+        i += 1
+    return split_dict
+
+split_dict = split_fam(ring, ind["dip"], spl, ind)
+
+ind = read.find_ind_ALBAII(ring)
+
 cORM = AnaORM.AnaORM(ring,"v", ind)
 cORM.assign_optics()
 cORM.bpm.broadcasters(1, 3)
 cORM.cor.broadcasters(2, 3)
 cORM.dip.broadcasters(0, 3)
 
-thickv = np.squeeze(cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip))
+thickv = np.squeeze(cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.dip))
 
+thickv_bo = np.zeros((208,176, 176))
+for i in range(208):
+    thickv_bo[i,:,:] = np.sum(thickv[i*spl:(i+1)*spl, :, :], axis = 0)
+    
+##########################################################
 
-###### Example calculating the dORM_dq with thin and thick elements!
-cORM = AnaORM.AnaORM(ring,"h", ind)
-cORM.assign_optics()
-cORM.dip2 = copy.deepcopy(cORM.dip)
-cORM.quad.correct_strength()#Acounts for the fact that 
-cORM.bpm.broadcasters(1, 4)
-cORM.cor.broadcasters(2, 4)
-cORM.dip.broadcasters(0, 4)
-cORM.dip2.broadcasters(3, 4)
+plot_utils.plot_both_Zeus(dORMV, dORMH, thickv_bo, thickv_bo)
 
-
-
-thickh = np.squeeze(cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip)) #+ cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.dip, cORM.dip2)
 
 
 ##########################################################
 
-plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
+plot_utils.plot_both_Zeus(dORMV, dORMV, thickv_bo, thickv_bo)
 
 
 

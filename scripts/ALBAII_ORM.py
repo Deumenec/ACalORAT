@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import numpy as np
 import at
+import matplotlib.pyplot as plt
 
 from ACalORAT import numerical
 from ACalORAT import read
@@ -115,7 +116,7 @@ cORM.quad.broadcasters(0, 3)
 thickv = cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad)
 ##########################################################
 
-
+"""
 ###### Example calculating the dORM_dq with thin and thick elements!
 cORM = AnaORM.AnaORM(ring,"h", ind)
 cORM.assign_optics()
@@ -124,11 +125,10 @@ cORM.dip.correct_entrance()#Corrects optics entrance at dipoles
 cORM.bpm.broadcasters(1, 4)
 cORM.cor.broadcasters(2, 4)
 cORM.quad.broadcasters(0, 4)
-cORM.dip.broadcasters(3, 4)
 
-thickh = np.sum(cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad),axis=3 ) + cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.quad, cORM.dip)
+thickh = np.sum(cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad),axis=3 ) #+ cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.quad, cORM.dip)
 ##########################################################
-
-plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
+"""
+plot_utils.plot_both_Zeus(dORMV, dORMV, thickv, thickv)
 
 

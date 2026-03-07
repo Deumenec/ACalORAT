@@ -509,7 +509,7 @@ class AnaORM:
         if not hasattr(Ej, 'avDispersion'):
             Ej.average()
         # 2. FIXED: Added the mandatory MINUS sign for the RF cavity response
-        ana_dORM_dq_disp = -(dni_dqk *Ej.avDispersion) / (self.mcf * self.circumference)
+        ana_dORM_dq_disp = -(dni_dqk *Ej.avDispersionB +dnj_dqk *Ei.dispersionB ) / (self.mcf * self.circumference)
         
         return np.real(ana_dORM_dq_disp)
         

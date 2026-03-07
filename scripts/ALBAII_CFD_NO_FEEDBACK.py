@@ -116,7 +116,7 @@ cORM.dip2.broadcasters(3, 4)
 
 
 
-thickh = np.squeeze(cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip)) + cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.dip, cORM.dip2)
+thickh = np.squeeze(cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip)) #+ cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.dip, cORM.dip2)
 
 cORM = AnaORM.AnaORM(ring,"v", ind)
 cORM.assign_optics()

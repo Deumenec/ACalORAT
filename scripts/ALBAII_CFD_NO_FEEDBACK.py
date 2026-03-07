@@ -121,6 +121,7 @@ thickh = np.squeeze(cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip)) 
 cORM = AnaORM.AnaORM(ring,"v", ind)
 cORM.assign_optics()
 #cORM.quad.correct_strength()#Acounts for the fact that 
+cORM.dip.correct_entrance()
 cORM.bpm.broadcasters(1, 3)
 cORM.cor.broadcasters(2, 3)
 cORM.dip.broadcasters(0, 3)
@@ -128,6 +129,6 @@ cORM.dip.broadcasters(0, 3)
 thickv = np.squeeze(cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip))
 ##########################################################
 
-plot_utils.plot_both_Zeus(dORMH, dORMV, thickh, thickv)
+plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
 
 

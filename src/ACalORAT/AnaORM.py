@@ -63,9 +63,9 @@ class Elements:
         """ To be called for dipoles to correct the optic functions inside of
         them after the fringe field and entrance angles. And adjust force.
         """
-
-        self.alpha = self.alpha -self.beta*np.tan(self.EntranceAngle)*(self.Bend/self.Length)
-        self.K = self.K + (self.Bend/self.Length)*(self.Bend/self.Length)
+        self.alpha = self.alpha +self.beta*np.tan(self.EntranceAngle)*(self.Bend/self.Length)
+        #THIS SECOND CORRECTION IS ONLY GOOD IN HORIZONTAL!
+        #self.K = self.K + (self.Bend/self.Length)*(self.Bend/self.Length)
         
     def correct_strength(self):
         """ Calculates the closed orbit off-momentum and uses it to correct the actual effective

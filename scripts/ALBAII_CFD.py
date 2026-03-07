@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon Feb  2 12:37:59 2026
+Created on Fri Mar  6 13:02:59 2026
 
 @author: dhuerta
 
-Calculating the derivative of the Orbit Response Matrix numerically with dispersion
-but without sextupoles in the ALBAII lattice and testing analytical formulas.
+Final true complete calculation of the CFD orit response matrix
 """
 
 import os

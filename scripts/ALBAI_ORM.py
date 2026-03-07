@@ -45,6 +45,10 @@ calc_dq        =  True
 
 ring, ind = read.ALBA(ROOT  / "data" / "THERING.mat")
 
+for i in ind["quad"]:
+    if hasattr(ring[i], 'NumIntSteps'):
+        ring[i].NumIntSteps = 100  # Crank this up!
+
 ###############################################################################
 # Configuration of file name for the different options used
 ###############################################################################
@@ -93,7 +97,7 @@ if read_numerical == False:
         numerical_ORM = numerical.dORM_dq(ring, ind["bpm"], ind["cor"]["h"], ind["quad"], step, "h")
         np.save(os.path.join(results,prefix + "h_numdORM_dq"),numerical_ORM)
         
-
+print("jee")
 dORMV = np.load(os.path.join(results,prefix + "v_numdORM_dq.npy"))
 dORMH = np.load(os.path.join(results,prefix + "h_numdORM_dq.npy"))
 
@@ -125,7 +129,7 @@ thickh = np.sum(cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad),axis=3 ) #+
 ##########################################################
 
 plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
-
+"""
 cORM = AnaORM.AnaORM(ring,"v", ind)
 cORM.assign_optics()
 cORM.bpm.broadcasters(0, 2)
@@ -134,10 +138,11 @@ aaORMV = cORM.Rab_thick2_(cORM.bpm, cORM.cor)
 
 aaORMV2 = cORM.Rab_thick2_disp(cORM.bpm, cORM.cor)
 
-sORMV = numerical.dORM_dq_semi(ring, ind, 1e-5, "v")
-sORMH = numerical.dORM_dq_semi(ring, ind, 1e-5, "h")
+sORMV = numerical.dORM_dq_semi(ring, ind, 1e-6, "v")
+sORMH = numerical.dORM_dq_semi(ring, ind, 1e-6, "h")
 
 plot_utils.plot_both_Zeus(dORMV, dORMH, sORMV, sORMH)
+"""
 """
 RespV = at.latticetools.OrbitResponseMatrix(ring, "v", ind["bpm"], ind["cor"]["v"])
 RespV.build_tracking() # FIX: build_tracking returns None

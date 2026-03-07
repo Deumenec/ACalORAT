@@ -24,6 +24,7 @@ SAVE = ROOT / "outputs" / "ALBAII_ORM"
 # Parameters to pass for the calculations
 ###############################################################################
 
+
     
 lattice_file   = 'ring_a2.mat' #Read ALBA II lattice ring_a2.mat or THERING.mat to read the ALBA one
 lattice_folder = 'lattices' #Important quan treballis amb aquests!
@@ -31,9 +32,9 @@ results        =  SAVE / 'A2' #A1 for the ALBA lattice and A2 for the ALBAII lat
 direction      = 'v' #v: vertical h: horizontal (SI NOMÉS ES FA EL CÀLCUL D'UNA)
 step_exp       =  5
 step           =  10**(-step_exp)
-read_numerical =  False
-dispersion     =  False  #Important ja que sino tot petaria amb la cromaticitat! calcular les matrius amb dispersió.
-lin_all        =  True  #To turn off higher order multipoles
+read_numerical =  True
+dispersion     =  True  #Important ja que sino tot petaria amb la cromaticitat! calcular les matrius amb dispersió.
+lin_all        =  False  #To turn off higher order multipoles
 max_ind        =  2     #cutoff index in polynomB
 RF_corr        =  False
 calc_dq        =  True
@@ -44,6 +45,10 @@ calc_dq        =  True
 ###############################################################################
 
 ring, ind = read.ALBAII(ROOT  / "data" / "ring_a2.mat")
+
+
+ind["quad"] = ind["quad"][:20]
+
 
 ###############################################################################
 # Configuration of file name for the different options used
@@ -87,12 +92,10 @@ if read_numerical == False:
     #IMPORTANT, add ind_cor[sub_direction] for ALBA2
     if calc_dq:
         numerical_ORM = numerical.dORM_dq(ring, ind["bpm"], ind["cor"]["v"], ind["quad"], step, "v")
-        np.save(os.path.join(results,prefix +"v_numdORM_dq"),numerical_ORM)
-        """
-        for i in ind["cor"]["h"]: ring[i].KickAngle = np.array([0,0])
+        #np.save(os.path.join(results,prefix +"v_numdORM_dq"),numerical_ORM)
+
         numerical_ORM = numerical.dORM_dq(ring, ind["bpm"], ind["cor"]["h"], ind["quad"], step, "h")
-        np.save(os.path.join(results,prefix + "h_numdORM_dq"),numerical_ORM)
-        """
+        #np.save(os.path.join(results,prefix + "h_numdORM_dq"),numerical_ORM)
 
 
 dORMV = np.load(os.path.join(results,prefix + "v_numdORM_dq.npy"))

@@ -133,8 +133,8 @@ def dORM_dq(ring, ind_bpm, ind_cor, ind_quad, step, direction):
     """
     print("hii")
     num_dORM_dq = np.zeros([len(ind_quad), len(ind_bpm), len(ind_cor)])
-    Resp = at.latticetools.OrbitResponseMatrix(ring,direction, ind_bpm, ind_cor, steerdelta = 1e-5) #class for computing the ORM
-    Resp.build_tracking()
+    Resp = at.latticetools.OrbitResponseMatrix(ring,direction, ind_bpm, ind_cor, steerdelta = 1e-6) #class for computing the ORM
+    Resp.build_tracking(tol=1e-12, max_iterations=100)
     ORM = Resp.response
     
     num_dORM_dq = Parallel(n_jobs=-1, verbose=10)(
@@ -184,7 +184,6 @@ def applyCorrections(ring, ind_cor, kicks, direction):
 def rms(vec):
     """Calculates the RMS of a given vector."""
     return np.sqrt(np.mean(vec*vec))
-    
 def kick_cor(ring , ind_bpm, ind_cor, threshold, original_orbit):
     """
     Tweek corrector kickangles to minimize errors at bpms with l2 norm matching
@@ -572,7 +571,7 @@ def dORMdEnergy(ring, ind, step = 0.1):
     
     return (ORMVp - ORMVn)/delta_total
     
-def quickdORMdEnergy(ring, ind, step=0.1):
+def quickdORMdEnergy(ring, ind,d = "v" ,step=0.001):
     """
     Computes dR_vertical / d_delta. 
     Note: Frequency shift is applied to the ring, but we measure the VERTICAL matrix.
@@ -587,7 +586,7 @@ def quickdORMdEnergy(ring, ind, step=0.1):
     
     # +step
     ring2.set_cavity(Frequency=ring_freq + step)
-    cORM_p = AnaORM.AnaORM(ring2, "v", ind)
+    cORM_p = AnaORM.AnaORM(ring2, d, ind)
     cORM_p.assign_optics()
     cORM_p.bpm.broadcasters(0, 2)
     cORM_p.cor.broadcasters(1, 2)
@@ -595,7 +594,7 @@ def quickdORMdEnergy(ring, ind, step=0.1):
     
     # -step
     ring2.set_cavity(Frequency=ring_freq - step)
-    cORM_n = AnaORM.AnaORM(ring2, "v", ind)
+    cORM_n = AnaORM.AnaORM(ring2, d, ind)
     cORM_n.assign_optics()
     cORM_n.bpm.broadcasters(0, 2)
     cORM_n.cor.broadcasters(1, 2)

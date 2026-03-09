@@ -57,8 +57,7 @@ class Elements:
         self.dispersionp = np.array([all_optics[2]["dispersion"][i][2*dir_ind+1] for i in ind], dtype= complex)
         if hasattr(ring[ind[0]], "BendingAngle"):self.Bend = np.array([ring[i].BendingAngle for i in ind])
         if hasattr(ring[ind[0]], "Length"):      self.Length = np.array([ring[i].Length for i in ind])
-        if (hasattr(ring[ind[0]], "PolynomB" ) and len(ring[ind[0]].PolynomB) >2):  self.K = np.array([-sgn*ring[i].PolynomB[1] for i in ind], dtype= complex)
-        
+        if (hasattr(ring[ind[0]], "PolynomB" ) and len(ring[ind[0]].PolynomB) >=2):  self.K = np.array([-sgn*ring[i].PolynomB[1] for i in ind], dtype= complex)
         if hasattr(ring[ind[0]], "EntranceAngle"): self.EntranceAngle = np.array([ring[i].EntranceAngle for i in ind], dtype= complex)   
         if hasattr(ring[ind[0]], "ExitAngle"): self.ExitAngle = np.array([ring[i].ExitAngle for i in ind], dtype= complex)   
     def correct_entrance(self):
@@ -71,7 +70,9 @@ class Elements:
             self.alpha += self._sgn *self.beta*np.tan(self.EntranceAngle)*(self.Bend/self.Length)
         #STRENGTH CORRECTION ONLY FOR HORIZONTAL ONES!
         if self._sgn == -1 and hasattr(self, "Bend"):
-            self.K = self.K + (self.Bend/self.Length)*(self.Bend/self.Length)
+            if not hasattr(self, "K"):
+                self.K =0
+            self.K +=  (self.Bend/self.Length)*(self.Bend/self.Length)
         
     def correct_strength(self):
         """ Calculates the closed orbit off-momentum and uses it to correct the actual effective
@@ -233,7 +234,7 @@ class AnaORM:
 
 
     def Ikc1(self, Ek: Elements):
-        """Integral for element WITH quadrupolar moment """
+        """Integral for element WITH quadrupolar moment (the definition with a hat) """
         return ((np.sqrt(Ek.betaB/Ek.KB)*np.sin(Ek.LengthB*np.sqrt(Ek.KB))+(Ek.alphaB*(np.cos(Ek.LengthB*np.sqrt(Ek.KB))-1))/(Ek.KB*np.sqrt(Ek.betaB))))/(Ek.LengthB*np.sqrt(Ek.betaB))
         
     def Iks1(self, Ek: Elements):
@@ -484,28 +485,90 @@ class AnaORM:
         CCjk2= Ikc2*Cjk2+Iks2*Sjk2
 
         #Terms for the dipoles, if they are CFD consider it as well through KB
+    
         if (hasattr(Ej, "Bend")):
-            print("CFD detected")
             Ijc1 = self.Ikc1(Ej)
             Ijs1 = self.Iks1(Ej)
         else:
             Ijc1 = self.Ikc1_(Ej)
             Ijs1 = self.Iks1_(Ej)        
 
-        
         dRij_terms =  (Cij1 * ( CCik2 + CCjk2 + 2*Ik0 *np.cos(np.pi * self.tune)**2) + 
                        Sij1 * ( SSik2 - SSjk2 + Ik0*np.sin(2*np.pi*self.tune)*(2*np.heaviside(Ei.muB-Ek.muB, 0)
                            -2*np.heaviside(Ej.muB-Ek.muB, 0)-np.sign(Ei.muB-Ej.muB)))) 
         dTij_terms = (Sij1 * ( CCik2 - CCjk2 + 2*Ik0 *np.cos(np.pi * self.tune)**2) + 
                       Cij1 * ( -SSjk2 - SSik2 + Ik0*np.sin(2*np.pi*self.tune)*(-2*np.heaviside(Ei.muB-Ek.muB, 0)
                            +2*np.heaviside(Ej.muB-Ek.muB, 0)+np.sign(Ei.muB-Ej.muB)))) 
-        dni_dqk =  (Ej.BendB* np.sqrt(Ei.betaB * Ej.betaB) 
+        
+        
+        
+        
+        dni_dqk =  -((Ej.BendB * np.sqrt(Ei.betaB * Ej.betaB)) 
          / (8 * np.sin(np.pi * self.tune)* np.sin(2 * np.pi * self.tune)) 
          * (Ijc1 * dRij_terms + Ijs1 * dTij_terms))
         
         return np.real(np.sum(dni_dqk, axis = Ej._bAxis))
         
-
+    def dni_dqk_sum_mod(self, Ei : Elements, Ej: Elements, Ek: Elements):
+        """ 
+        MODIFIED VERSION FOR DEBUGGING
+        Derivative of the dispersions in Ei with respect to given quadrupole
+        strengths Ek considering Ej dipoles in the ring... VALIDATED!!
+        #TODO: LACKS THE derivative with respect to integral terms!
+        """
+    
+        Cij1 = self.Cabn(Ei, Ej, 1)
+        Cik2 = self.Cabn(Ei, Ek, 2)
+        Cjk2 = self.Cabn(Ej, Ek, 2)
+        Sij1 = self.Sabn(Ei, Ej, 1)
+        Sik2 = self.Sabn(Ei, Ek, 2)
+        Sjk2 = self.Sabn(Ej, Ek, 2)
+        
+        #Terms for the thick quadrupole formula      
+        
+        Ik0  = self.Ik0(Ek)
+        Iks2 = self.Iks2(Ek)
+        Ikc2 = self.Ikc2(Ek)
+        SSik2= Ikc2*Sik2-Iks2*Cik2
+        SSjk2= Ikc2*Sjk2-Iks2*Cjk2
+        CCik2= Ikc2*Cik2+Iks2*Sik2
+        CCjk2= Ikc2*Cjk2+Iks2*Sjk2
+    
+        #Terms for the dipoles, if they are CFD consider it as well through KB
+    
+        if (hasattr(Ej, "Bend")):
+            Ijc1 = self.Ikc1(Ej)
+            Ijs1 = self.Iks1(Ej)
+        else:
+            Ijc1 = self.Ikc1_(Ej)
+            Ijs1 = self.Iks1_(Ej)        
+    
+        dRij_terms =  (Cij1 * ( CCik2 + CCjk2 + 2*Ik0 *np.cos(np.pi * self.tune)**2) + 
+                       Sij1 * ( SSik2 - SSjk2 + Ik0*np.sin(2*np.pi*self.tune)*(2*np.heaviside(Ei.muB-Ek.muB, 0)
+                           -2*np.heaviside(Ej.muB-Ek.muB, 0)-np.sign(Ei.muB-Ej.muB)))) 
+        dTij_terms = 0*(Sij1 * ( CCik2 - CCjk2 + 2*Ik0 *np.cos(np.pi * self.tune)**2) + 
+                      Cij1 * ( -SSjk2 - SSik2 + Ik0*np.sin(2*np.pi*self.tune)*(-2*np.heaviside(Ei.muB-Ek.muB, 0)
+                           +2*np.heaviside(Ej.muB-Ek.muB, 0)+np.sign(Ei.muB-Ej.muB)))) 
+        
+        
+        
+        
+        dni_dqk =  -((Ej.BendB * np.sqrt(Ei.betaB * Ej.betaB)) 
+         / (8 * np.sin(np.pi * self.tune)* np.sin(2 * np.pi * self.tune)) 
+         * (Ijc1 * dRij_terms + Ijs1 * dTij_terms))
+        
+        return np.real(np.sum(dni_dqk, axis = Ej._bAxis))
+    
+    def dni_dqk_new(self, Ei : Elements, Ek: Elements):
+        """ 
+        MODIFIED VERSION FOR DEBUGGING
+        """
+    
+        Rik = self.Rab_thick2_K(Ei, Ek)
+        if not hasattr(Ek, 'avDispersion'):
+            Ek.average()
+        
+        return np.real(np.squeeze(- Ek.avDispersionB * Rik)/Ek.KB)
 
     def dRij_dqk_thick23_disp(self, Ei : Elements, Ej : Elements, Ek : Elements, El : Elements):
         """Computes the dRij_dqk dispersion term, which is relevant in the HORIZONTAL

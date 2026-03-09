@@ -91,6 +91,7 @@ cORM = AnaORM.AnaORM(ring,"h" ,ind)
 cORM.assign_optics()
 
 cORM.dip.correct_entrance() #Already correcting for the hef
+#cORM.dip.correct_strength()
 
 cORM.bpm.broadcasters(0, 2)
 cORM.dip.broadcasters(1, 2)
@@ -113,19 +114,98 @@ def disp_i_dk(disp_i, ring, quad, step):
     quad: index of the changed quad
     """
     ring = copy.deepcopy(ring)
-    ring[quad].K += step
+    ring[quad].PolynomB[1] += step
     optics = at.get_optics(ring, refpts=ind["bpm"])
     new_disp_i = optics[2]["dispersion"][:, 0]
-    return (new_disp_i-disp_i)/step
+    
+    ring[quad].PolynomB[1] -= 2*step
+    optics = at.get_optics(ring, refpts=ind["bpm"])
+    new_disp_j = optics[2]["dispersion"][:, 0]
+    
+    return (new_disp_i-new_disp_j)/(2*step)
 
 di_dk = np.zeros((len(ind["quad"]),len(ind["bpm"]))) 
 
 if False:
     for i in range(len(ind["quad"])):
-        di_dk[i] = disp_i_dk(dispReal, ring, ind["quad"][i], 1e-5)
+        di_dk[i] = disp_i_dk(dispReal, ring, ind["quad"][i], step)
     np.save("di_dk",di_dk )
     
 di_dk = np.load("di_dk.npy")
+
+
+
+#CODE TO SPLIT ELEMENTS TO TEST THE ANALYTICAL FORMUMA!
+
+spl = 1 #Number of times the correctors
+
+
+
+    
+    
+#SPLITTING SEEMS TO MAKE EVERYTHING WORSE SO THERE IS NO POINT!
+def split_el(ring, i, num):
+    """Given a ring element i, the ring is modified to have that element 
+    split num times handling frontier and length"""
+    split_el = copy.deepcopy(ring[i])
+    if hasattr(split_el,"Length"):
+        split_el.Length = split_el.Length/num
+    else:
+        raise TypeError(f"Intentant dividir l'element {i} prim")
+    ring.pop(i)
+    if hasattr(split_el,"BendingAngle"):
+        split_el.BendingAngle = split_el.BendingAngle/num
+    for j in range(num): ring.insert(i, copy.deepcopy(split_el), copy_elements=True)
+    if hasattr(split_el,"EntranceAngle"):
+        for j in range(num-1): 
+            ring[i+j+1].EntranceAngle = 0
+            ring[i+j].ExitAngle = 0        
+    return 
+
+
+def split_fam(ring, ind, num, ind0):
+    """"Split a family of elements in a ring each one in a certain number returns a dict """
+    i = 0
+    ind_c = copy.copy(ind)
+    split_dict = {}
+    while i<len(ind):
+        split_dict.update({ind_c[i]:np.array(range(ind_c[i], ind_c[i]+num))})
+        split_el(ring, ind_c[i], num)
+        ind_c += num-1
+        for fam in ind0:
+            if type(fam) == np.ndarray: 
+                fam += num-1
+        i += 1
+    return split_dict
+
+
+
+split_dict = split_fam(ring, ind["dip"], spl, ind)
+
+ind = read.find_ind_ALBAII(ring)
+
+
+cORM = AnaORM.AnaORM(ring,"h" ,ind)
+cORM.assign_optics()
+cORM.dip.correct_entrance()
+cORM.dip.correct_strength()
+cORM.bpm.broadcasters(1, 3)
+cORM.quad.broadcasters(0, 3)
+cORM.dip.broadcasters(2, 3)
+
+di_dk_ana = cORM.dni_dqk_sum_mod(cORM.bpm, cORM.dip, cORM.quad)
+
+#di_dk_ana = np.zeros((97,176))
+
+
+"""
+
+#Splitting along quadru
+
+split_dict = split_fam(ring, ind["quad"], spl, ind)
+
+ind = read.find_ind_ALBAII(ring)
+
 
 cORM = AnaORM.AnaORM(ring,"h" ,ind)
 cORM.assign_optics()
@@ -134,8 +214,25 @@ cORM.bpm.broadcasters(1, 3)
 cORM.quad.broadcasters(0, 3)
 cORM.dip.broadcasters(2, 3)
 
-di_dk_ana = cORM.dni_dqk_sum(cORM.bpm, cORM.dip, cORM.quad)
+z_di_dk_ana = cORM.dni_dqk_sum(cORM.bpm, cORM.dip, cORM.quad)
+
+di_dk_ana = np.zeros((97,176))
 
 
+for i in range(97):
+   di_dk_ana[i] = np.sum(z_di_dk_ana[i*spl:(i+1)*spl], axis = 0)
+###### Example calculating the dORM_dq with thin and thick elements!
 
+"""
 
+cORM = AnaORM.AnaORM(ring,"h" ,ind)
+cORM.assign_optics()
+cORM.dip.correct_entrance()
+cORM.dip.correct_strength()
+cORM.bpm.broadcasters(1, 3)
+cORM.quad.broadcasters(0, 3)
+cORM.dip.broadcasters(2, 3)
+
+di_dk_ana = cORM.dni_dqk_sum_mod(cORM.bpm, cORM.dip, cORM.quad)
+
+di_dk_new = cORM.dni_dqk_new(cORM.bpm, cORM.quad)

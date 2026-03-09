@@ -57,15 +57,17 @@ class Elements:
         self.dispersionp = np.array([all_optics[2]["dispersion"][i][2*dir_ind+1] for i in ind], dtype= complex)
         if hasattr(ring[ind[0]], "BendingAngle"):self.Bend = np.array([ring[i].BendingAngle for i in ind])
         if hasattr(ring[ind[0]], "Length"):      self.Length = np.array([ring[i].Length for i in ind])
-        if hasattr(ring[ind[0]], "K"):           self.K = np.array([-sgn*ring[i].K for i in ind], dtype= complex)
+        if (hasattr(ring[ind[0]], "PolynomB" ) and len(ring[ind[0]].PolynomB) >2):  self.K = np.array([-sgn*ring[i].PolynomB[1] for i in ind], dtype= complex)
+        
         if hasattr(ring[ind[0]], "EntranceAngle"): self.EntranceAngle = np.array([ring[i].EntranceAngle for i in ind], dtype= complex)   
         if hasattr(ring[ind[0]], "ExitAngle"): self.ExitAngle = np.array([ring[i].ExitAngle for i in ind], dtype= complex)   
     def correct_entrance(self):
         """ To be called for dipoles to correct the optic functions inside of
         them after entrance angles. And adjust force.
         """
+        #TODO: Think a while about the strength corrections!
         #Entrance angle correction to betas
-        if self._sgn == 1 and hasattr(self, "EntranceAngle"):
+        if hasattr(self, "EntranceAngle"):
             self.alpha += self._sgn *self.beta*np.tan(self.EntranceAngle)*(self.Bend/self.Length)
         #STRENGTH CORRECTION ONLY FOR HORIZONTAL ONES!
         if self._sgn == -1 and hasattr(self, "Bend"):
@@ -340,7 +342,8 @@ class AnaORM:
     
     def dRij_dqk_thick23(self, Ei : Elements, Ej : Elements, Ek : Elements):
         """Computes the dRij_dqk asssuming thick correctors without quadrupolar component and thick quadrupoles"""
-
+        Ek = copy.deepcopy(Ek)
+        Ek.correct_entrance()
         Cij1 = self.Cabn(Ei, Ej, 1)
         Cik2 = self.Cabn(Ei, Ek, 2)
         Cjk2 = self.Cabn(Ej, Ek, 2)
@@ -459,7 +462,8 @@ class AnaORM:
         
     def dni_dqk_sum(self, Ei : Elements, Ej: Elements, Ek: Elements):
         """ Derivative of the dispersions in Ei with respect to given quadrupole
-        strengths Ek considering Ej dipoles in the ring... VALIDATED!
+        strengths Ek considering Ej dipoles in the ring... VALIDATED!!
+        #TODO: LACKS THE derivative with respect to integral terms!
         """
     
         Cij1 = self.Cabn(Ei, Ej, 1)
@@ -480,13 +484,13 @@ class AnaORM:
         CCjk2= Ikc2*Cjk2+Iks2*Sjk2
 
         #Terms for the dipoles, if they are CFD consider it as well through KB
-        if (hasattr(Ej, "KB")):
+        if (hasattr(Ej, "Bend")):
             print("CFD detected")
-            Ijc1 = self.Ijc1_L(Ej)
-            Ijs1 = self.Ijs1_L(Ej)
+            Ijc1 = self.Ikc1(Ej)
+            Ijs1 = self.Iks1(Ej)
         else:
-            Ijc1 = self.Ijc1_q_L(Ej)
-            Ijs1 = self.Ijs1_q_L(Ej)        
+            Ijc1 = self.Ikc1_(Ej)
+            Ijs1 = self.Iks1_(Ej)        
 
         
         dRij_terms =  (Cij1 * ( CCik2 + CCjk2 + 2*Ik0 *np.cos(np.pi * self.tune)**2) + 
@@ -495,27 +499,44 @@ class AnaORM:
         dTij_terms = (Sij1 * ( CCik2 - CCjk2 + 2*Ik0 *np.cos(np.pi * self.tune)**2) + 
                       Cij1 * ( -SSjk2 - SSik2 + Ik0*np.sin(2*np.pi*self.tune)*(-2*np.heaviside(Ei.muB-Ek.muB, 0)
                            +2*np.heaviside(Ej.muB-Ek.muB, 0)+np.sign(Ei.muB-Ej.muB)))) 
-        dni_dqk =  (np.abs(Ej.BendB)* np.sqrt(Ei.betaB * Ej.betaB) 
+        dni_dqk =  (Ej.BendB* np.sqrt(Ei.betaB * Ej.betaB) 
          / (8 * np.sin(np.pi * self.tune)* np.sin(2 * np.pi * self.tune)) 
          * (Ijc1 * dRij_terms + Ijs1 * dTij_terms))
-        return np.sum(dni_dqk, axis = Ej._bAxis)
+        
+        return np.real(np.sum(dni_dqk, axis = Ej._bAxis))
         
 
 
     def dRij_dqk_thick23_disp(self, Ei : Elements, Ej : Elements, Ek : Elements, El : Elements):
         """Computes the dRij_dqk dispersion term, which is relevant in the HORIZONTAL
         transverse dimension, neglecting the derivative with respect to the mcf
-        Ei: BPMs,  Ej: correctors, Ek: quadrupoles, El: dipoles
-        THIS formula only applies when quadrupoles (Ek) are not also bending magnets.
+        Ei: BPMs,         1
+        Ej: correctors,   2
+        Ek: quadrupoles,  0
+        El: dipoles       0
+        THIS formula only applies for all Ek.
         """
+        Ei = copy.deepcopy(Ei)
+        Ej = copy.deepcopy(Ej)
+        Ek = copy.deepcopy(Ek)
+        El = copy.deepcopy(El)
         
-        dni_dqk = self.dni_dqk_sum(Ei, El, Ek)
-        dnj_dqk = self.dni_dqk_sum(Ej, El, Ek) # This is the derivative at the entrance!
+        Ei.broadcasters(1, 4)
+        Ej.broadcasters(2, 4)
+        Ek.broadcasters(0, 4)
+        El.broadcasters(3, 4)
+        
+        dni_dqk = np.squeeze(self.dni_dqk_sum(Ei, El, Ek))[:, :, None]
+        dnj_dqk = np.squeeze(self.dni_dqk_sum(Ej, El, Ek))[:, None, :] # This is the derivative at the entrance!
+        
+        Ei.broadcasters(1, 3)
+        Ej.broadcasters(2, 3)
+        Ek.broadcasters(0, 3)
         
         if not hasattr(Ej, 'avDispersion'):
             Ej.average()
         # 2. FIXED: Added the mandatory MINUS sign for the RF cavity response
-        ana_dORM_dq_disp = -(dni_dqk *Ej.avDispersionB +dnj_dqk *Ei.dispersionB ) / (self.mcf * self.circumference)
+        ana_dORM_dq_disp = (dni_dqk *Ej.avDispersionB +dnj_dqk *Ei.dispersionB ) / (self.mcf * self.circumference)
         
         return np.real(ana_dORM_dq_disp)
         

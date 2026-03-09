@@ -102,8 +102,6 @@ dORMH = np.load(os.path.join(results,prefix + "h_numdORM_dq.npy"))
 #Calculating dORM with thick elements and assessing validity
 ###############################################################################
 
-#time1 = time.perf_counter()
-###### Example calculating the dORM_dq with thin and thick elements!
 cORM = AnaORM.AnaORM(ring,"v" ,ind)
 cORM.assign_optics()
 cORM.bpm.broadcasters(1, 3)
@@ -111,6 +109,7 @@ cORM.cor.broadcasters(2, 3)
 cORM.quad.broadcasters(0, 3)
 thickv = cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad)
 ##########################################################
+
 
 ###### Example calculating the dORM_dq with thin and thick elements!
 cORM = AnaORM.AnaORM(ring,"h", ind)
@@ -121,28 +120,7 @@ cORM.bpm.broadcasters(1, 4)
 cORM.cor.broadcasters(2, 4)
 cORM.quad.broadcasters(0, 4)
 cORM.dip.broadcasters(3, 4)
-
-thickh = np.sum(cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad),axis=3 ) #- cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.quad, cORM.dip)
+thickh = np.sum(cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad),axis=3 ) + cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.quad, cORM.dip)
 ##########################################################
 
 plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
-"""
-cORM = AnaORM.AnaORM(ring,"v", ind)
-cORM.assign_optics()
-cORM.bpm.broadcasters(0, 2)
-cORM.cor.broadcasters(1, 2)
-aaORMV = cORM.Rab_thick2_(cORM.bpm, cORM.cor)
-
-aaORMV2 = cORM.Rab_thick2_disp(cORM.bpm, cORM.cor)
-
-sORMV = numerical.dORM_dq_semi(ring, ind, 1e-6, "v")
-sORMH = numerical.dORM_dq_semi(ring, ind, 1e-6, "h")
-
-plot_utils.plot_both_Zeus(dORMV, dORMH, sORMV, sORMH)
-"""
-"""
-RespV = at.latticetools.OrbitResponseMatrix(ring, "v", ind["bpm"], ind["cor"]["v"])
-RespV.build_tracking() # FIX: build_tracking returns None
-aanumORMV = RespV.response
-"""
-

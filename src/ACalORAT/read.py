@@ -53,6 +53,21 @@ def ALBAII(path):
     ind = {"bpm": ind_bpm, "cor": ind_cor, "quad": ind_quad, "dip": ind_dip,"CFD": ind_dip , "RF": ind_RF, "sex": ind_sex, "all_quad":ind_all_quad}
     return ring, ind
 
+
+def find_ind_ALBA(ring):
+    """From a modified lattice of ALBAII indices for elements are found."""
+    ind_bpm  = np.array(at.get_refpts(ring, 'BPM'))  #Indices for the BPM
+    ind_cor     = { "v": np.array(at.get_refpts(ring, 'COR')), 
+                    "h": np.array(at.get_refpts(ring, 'COR'))}
+    ind_quad =  np.array(at.get_refpts(ring, lambda el: el.FamName.startswith('QV') or el.FamName.startswith('QH')))
+    ind_dip =  np.array(at.get_refpts(ring, lambda el: el.FamName.startswith('BEND')))
+    ind_RF = []
+    ind_sex = np.array([])
+    ind = {"bpm": ind_bpm, "cor": ind_cor, "quad": ind_quad, "dip": ind_dip, "RF": ind_RF, "sex": ind_sex}
+    return ind
+    
+
+
 def find_ind_ALBAII(ring):
     """From a modified lattice of ALBAII indices for elements are found."""
     ordsV = re.compile('^COR$|^SH[1-7][1-4]?$|^SV[246]');
@@ -74,4 +89,10 @@ def find_ind_ALBAII(ring):
     ind_all_quad = np.sort(np.concatenate((ind_quad,ind_dip)))
     ind = {"bpm": ind_bpm, "cor": ind_cor, "quad": ind_quad, "dip": ind_dip,"CFD": ind_dip , "RF": ind_RF, "sex": ind_sex, "all_quad":ind_all_quad}
     return ind
+
+
+
+
+
+
     

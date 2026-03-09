@@ -165,7 +165,7 @@ cORM.dip.correct_entrance()#Corrects optics entrance at dipoles
 cORM.bpm.broadcasters(1, 4)
 cORM.cor.broadcasters(2, 4)
 cORM.quad.broadcasters(0, 4)
-#cORM.dip.broadcasters(3, 4)
+#cORM.    .broadcasters(3, 4)
 
 thickh = np.sum(cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad),axis=3) #+ cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.quad, cORM.dip)
 

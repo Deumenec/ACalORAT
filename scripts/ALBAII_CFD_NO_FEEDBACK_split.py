@@ -38,7 +38,7 @@ step           =  10**(-step_exp)
 read_numerical =  True
 dispersion     =  True  #Important ja que sino tot petaria amb la cromaticitat! calcular les matrius amb dispersió.
 lin_all        =  False  #To turn off higher order multipoles
-max_ind        =  2     #cutoff index in polynomB
+max_            =  2     #cutoff index in polynomB
 calc_dq        =  True
 
 
@@ -104,8 +104,9 @@ dORMV = np.load(os.path.join(results,prefix + "v_numdORM_dq.npy"))
 #Calculating dORM with thick elements and assessing validity
 ###############################################################################
 
-spl = 2 #Number of times the correctors
+spl = 5 #Number of times the correctors
 
+#SPLITTING SEEMS TO MAKE EVERYTHING WORSE SO THERE IS NO POINT!
 def split_el(ring, i, num):
     """Given a ring element i, the ring is modified to have that element 
     split num times handling frontier and length"""

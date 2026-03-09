@@ -118,14 +118,13 @@ cORM = AnaORM.AnaORM(ring,"h", ind)
 cORM.assign_optics()
 cORM.dip2 = copy.deepcopy(cORM.dip)
 cORM.quad.correct_strength()#Acounts for the fact that 
-cORM.bpm.broadcasters(1, 4)
-cORM.cor.broadcasters(2, 4)
-cORM.dip.broadcasters(0, 4)
-cORM.dip2.broadcasters(3, 4)
+cORM.bpm.broadcasters(1, 3)
+cORM.cor.broadcasters(2, 3)
+cORM.dip.broadcasters(0, 3)
 
 
 
-thickh = np.squeeze(cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip)) #+ cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.dip, cORM.dip2)
+thickh = np.squeeze(cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip)) - cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.dip, cORM.dip2)
 
 
 ##########################################################

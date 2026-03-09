@@ -45,8 +45,8 @@ def get_mcf(ring):
     return ring.mcf
 
     
-lattice_file   = 'ring_a2.mat' #Read ALBA II lattice ring_a2.mat or THERING.mat to read the ALBA one
-results        = 'A2' #A1 for the ALBA lattice and A2 for the ALBAII lattice and CFDA2
+lattice_file   = 'THERING.mat' #Read ALBA II lattice ring_a2.mat or THERING.mat to read the ALBA one
+results        = 'A1' #A1 for the ALBA lattice and A2 for the ALBAII lattice and CFDA2
 direction      = 'v' #v: vertical h: horizontal (SI NOMÉS ES FA EL CÀLCUL D'UNA)
 step_exp       =  5
 step           =  10**(-step_exp)
@@ -64,20 +64,20 @@ calc_dCFD      =  True
 ###############################################################################
 
 lattice_path = ROOT / "data" /lattice_file
-ring, ind = read.ALBAII(lattice_path)
+ring, ind0 = read.ALBA(lattice_path)
 
 #Initial values
 val_mcf = get_mcf(ring)
 optics = at.get_optics(ring, refpts = range(len(ring)))[2]
-disps = np.array([optics["dispersion"][i][0] for i in range(len(ring))])[ind["bpm"]]
-c_orbit0 = at.find_orbit6(ring, refpts=ind["bpm"])[1] 
+disps = np.array([optics["dispersion"][i][0] for i in range(len(ring))])[ind0["bpm"]]
+c_orbit0 = at.find_orbit6(ring, refpts=ind0["bpm"])[1] 
 
 #Change ring parameters
 ring_freq = ring.get_rf_frequency()
 ring.set_cavity(Frequency=ring_freq+step)
 
 #Get new orbit
-c_orbit1 = at.find_orbit6(ring, refpts=ind["bpm"])[1] 
+c_orbit1 = at.find_orbit6(ring, refpts=ind0["bpm"])[1] 
 
 #Calculate derivative with only the horizontal displacement
 x0 = np.array([i[0] for i in c_orbit0])
@@ -85,17 +85,54 @@ x1 = np.array([i[0] for i in c_orbit1])
 
 disp_num = - (val_mcf*ring_freq )*(x1-x0)/step 
 
+spl = 1
+
+def split_el(ring, i, num):
+    """Given a ring element i, the ring is modified to have that element 
+    split num times handling frontier and length"""
+    split_el = copy.deepcopy(ring[i])
+    if hasattr(split_el,"Length"):
+        split_el.Length = split_el.Length/num
+    else:
+        raise TypeError(f"Intentant dividir l'element {i} prim")
+    ring.pop(i)
+    if hasattr(split_el,"BendingAngle"):
+        split_el.BendingAngle = split_el.BendingAngle/num
+    for j in range(num): ring.insert(i, copy.deepcopy(split_el), copy_elements=True)
+    for j in range(num-1): 
+        ring[i+j+1].EntranceAngle = 0
+        ring[i+j].ExitAngle = 0        
+    return 
+
+def split_fam(ring, ind, num, ind0):
+    """"Split a family of elements in a ring each one in a certain number returns a dict """
+    i = 0
+    ind_c = copy.copy(ind)
+    split_dict = {}
+    while i<len(ind):
+        split_dict.update({ind_c[i]:np.array(range(ind_c[i], ind_c[i]+num))})
+        split_el(ring, ind_c[i], num)
+        ind_c += num-1
+        for fam in ind0:
+            if type(fam) == np.ndarray: 
+                fam += num-1
+        i += 1
+    return split_dict
+
+split_dict = split_fam(ring, ind0["dip"], spl, ind0)
+
+ind = read.find_ind_ALBA(ring)
 
 ###########Dispersion test in bpms######################
 cORM = AnaORM.AnaORM(ring,"h" ,ind)
 cORM.assign_optics()
 
-cORM.dip.correct_entrance() #Already correcting for the hef
-
+#cORM.dip.correct_entrance() #Already correcting for the hef
+#cORM.dip.correct_strength()
 cORM.bpm.broadcasters(0, 2)
 cORM.dip.broadcasters(1, 2)
 disp0 = cORM.ni_sum(cORM.bpm, cORM.dip)
-dispReal = optics["dispersion"][ind["bpm"], 0]
+dispReal = optics["dispersion"][ind0["bpm"], 0]
 ########################################################
 
 plt.plot(dispReal, label = "real")
@@ -104,14 +141,16 @@ plt.title("Dipole originated dispersion")
 plt.legend()
 plt.show()
 
+
+"""
 ##Numerical derivative of dispersion in bpms with respect to quadrupoles######
 
 def disp_i_dk(disp_i, ring, quad, step):
     """
-    For a given quad, we calculate the derivative of dispersion in bpms in the 
-    h transverse dimension with respect to changing its strength.
-    quad: index of the changed quad
-    """
+    #For a given quad, we calculate the derivative of dispersion in bpms in the 
+    #h transverse dimension with respect to changing its strength.
+    #quad: index of the changed quad
+"""
     ring = copy.deepcopy(ring)
     ring[quad].K += step
     optics = at.get_optics(ring, refpts=ind["bpm"])
@@ -136,6 +175,6 @@ cORM.dip.broadcasters(2, 3)
 
 di_dk_ana = cORM.dni_dqk_sum(cORM.bpm, cORM.dip, cORM.quad)
 
-
+"""
 
 

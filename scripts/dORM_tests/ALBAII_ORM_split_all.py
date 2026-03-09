@@ -147,6 +147,15 @@ split_dict = split_fam(ring, ind["quad"], spl2, ind)
 ind = read.find_ind_ALBAII(ring)
 
 
+###### Example calculating the dORM_dq with thin and thick elements!
+cORM = AnaORM.AnaORM(ring,"v" ,ind)
+cORM.assign_optics()
+cORM.bpm.broadcasters(1, 3)
+cORM.cor.broadcasters(2, 3)
+cORM.quad.broadcasters(0, 3)
+thickv = cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad)
+##########################################################
+
 
 thickv_bo0 = np.zeros((97*spl2,176, 176))
 for i in range(176):
@@ -159,7 +168,6 @@ for i in range(97):
     thickv_bo[i] = np.sum(thickv_bo0[i*spl2:(i+1)*spl2], axis = 0)
 ###### Example calculating the dORM_dq with thin and thick elements!
 
-"""
 cORM = AnaORM.AnaORM(ring,"h", ind)
 cORM.assign_optics()
 cORM.dip.correct_entrance()#Corrects optics entrance at dipoles
@@ -174,7 +182,7 @@ thickh = np.sum(cORM.dRij_dqk_thin(cORM.bpm, cORM.cor, cORM.quad),axis=3) #+ cOR
 thickh_bo = np.zeros((97*spl,176, 176))
 for i in range(97):
     thickh_bo[:,:,i] = np.sum(thickh[:,:,i*spl:(i+1)*spl], axis = 2)/spl
-"""
+
 ##########################################################
 
 plot_utils.plot_both_Zeus(dORMV, dORMH, thickv_bo, thickv_bo)

@@ -143,12 +143,6 @@ dORMV = np.transpose(dORMV, (2,1,0))
 dORMH = np.transpose(dORMH, (2,1,0))
 
 
-##TESTS###
-dORMV = np.transpose(dORMV, (2,1,0))
-dORMH = np.transpose(dORMH, (2,1,0))
-thickv = np.transpose(thickv, (2,1,0))
-thickh = np.transpose(thickh, (2,1,0))
-
 plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
 
 

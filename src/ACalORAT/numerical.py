@@ -85,6 +85,44 @@ def compute_single_quad_pure(ring, quad, ORM, direction, step, ind_bpm, ind_cor)
 
     return (resp1 - resp2) / (2*step)
 
+def compute_single_dip_pure(ring, quad, direction, step, ind_bpm, ind_cor):
+    """Numerical parital derivative with respect to changing only a pure dipole component
+    It is also normalized with respect to changing the corresponding quadrupole but it
+    Doesn't change here
+    """
+    #Make a deep copy of the ring so threads don't interfere
+    local_ring = copy.deepcopy(ring)
+    elem = local_ring[quad]
+    
+    #Change the quadrupole strength AND DIPOLE STRENGTH
+    base_K = elem.PolynomB[1] 
+    
+    if base_K != 0 and hasattr(elem, "BendingAngle"):
+        ratio = elem.BendingAngle / (elem.Length * base_K)
+    else:
+        ratio = 0
+    elem.PolynomB[0] += step * ratio
+
+    #Compute the new ORM
+    Resp_local = at.latticetools.OrbitResponseMatrix(
+        local_ring, direction, ind_bpm, ind_cor, steerdelta = 5e-7)
+    
+    resp1 = Resp_local.build_tracking(tol=1e-13, max_iterations=150)
+    energy1 = at.get_optics(local_ring, refpts=range(len(local_ring)))[2]["closed_orbit"][:, 4]
+    
+    #Steping down the local ring for the second derivative
+    elem.PolynomB[0] += -2*step * ratio
+
+    #Compute the new ORM
+    Resp_local = at.latticetools.OrbitResponseMatrix(
+        local_ring, direction, ind_bpm, ind_cor, steerdelta = 5e-7)
+    
+    resp2 = Resp_local.build_tracking(tol=1e-13, max_iterations=150)
+    energy2 = at.get_optics(local_ring, refpts=range(len(local_ring)))[2]["closed_orbit"][:, 4]
+    result = {"num_dORM_dq": (resp1 - resp2) / (2*step),
+              "energy": np.average((energy1 - energy2))/(2*step)}
+    return result
+
 def single_snum_quad(ring, quad, ORM, direction, step, ind):
     """
     Calculates the ORM semi-numerially by just calculating the ORM in different
@@ -163,8 +201,8 @@ def dORM_dq(ring, ind_bpm, ind_cor, ind_quad, step, direction):
     -------
     num_dORM_dq: np.array 
         The dORM_dq rank 3 tensor with indices dORM_dq[quadrupole][bpm][corrector]
+        
     """
-    print("hii")
     num_dORM_dq = np.zeros([len(ind_quad), len(ind_bpm), len(ind_cor)])
     Resp = at.latticetools.OrbitResponseMatrix(ring,direction, ind_bpm, ind_cor, steerdelta = 1e-6) #class for computing the ORM
     Resp.build_tracking(tol=1e-12, max_iterations=100)
@@ -193,8 +231,9 @@ def dORM_dq_pure(ring, ind_bpm, ind_cor, ind_quad, step, direction):
     -------
     num_dORM_dq: np.array 
         The dORM_dq rank 3 tensor with indices dORM_dq[quadrupole][bpm][corrector]
+        With respect to changing both the quadrupolar and the dipolar component acordingly
+        and with no active feedback correction.
     """
-    print("hii")
     num_dORM_dq = np.zeros([len(ind_quad), len(ind_bpm), len(ind_cor)])
     Resp = at.latticetools.OrbitResponseMatrix(ring,direction, ind_bpm, ind_cor, steerdelta = 1e-6) #class for computing the ORM
     Resp.build_tracking(tol=1e-12, max_iterations=100)
@@ -204,6 +243,40 @@ def dORM_dq_pure(ring, ind_bpm, ind_cor, ind_quad, step, direction):
         delayed(compute_single_quad_pure) (ring, quad, ORM, direction, step, ind_bpm, ind_cor) for quad in ind_quad)
     num_dORM_dq = np.array(num_dORM_dq)
     return num_dORM_dq
+
+def dORM_dbend(ring, ind_bpm, ind_cor, ind_quad, step, direction):
+    """
+    Parameters
+    ----------
+    ring : at.lattice
+        Ring for which the matrix is calculated
+    ind_bpm : array
+        indices of the BPMs for the ORM matrix
+    ind_cor : array
+        indices of the correctors for the ORM matrix
+    ind_quad : array
+        indices 
+    dimension : char
+        "v" for the vertical dimension and "h"
+    Returns
+    -------
+    dict:
+        num_dORM_dq: np.array 
+            The dORM_dq rank 3 tensor with indices dORM_dq[quadrupole][bpm][corrector]
+            With respect to changing ONLY the dipole component of given magnets
+        energy: np.array
+    
+    """
+    num_dORM_dq = np.zeros([len(ind_quad), len(ind_bpm), len(ind_cor)])
+    energy = np.zeros([len(ind_quad)])
+    results = []
+    results = Parallel(n_jobs=-3, verbose=10)(
+        delayed(compute_single_dip_pure) (ring, quad, direction, step, ind_bpm, ind_cor) for quad in ind_quad)
+    for i, res in enumerate(results):
+        energy[i] = res["energy"]
+        num_dORM_dq[i] = res["num_dORM_dq"]
+        
+    return num_dORM_dq, energy
 
 def dORM_dq_semi(ring, ind, step, direction):
     """
@@ -247,6 +320,7 @@ def applyCorrections(ring, ind_cor, kicks, direction):
 def rms(vec):
     """Calculates the RMS of a given vector."""
     return np.sqrt(np.mean(vec*vec))
+
 def kick_cor(ring , ind_bpm, ind_cor, threshold, original_orbit):
     """
     Tweek corrector kickangles to minimize errors at bpms with l2 norm matching
@@ -442,13 +516,11 @@ def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
     Computes derivatives using Central Difference (f(x+h) - f(x-h)) / 2h.
     """
 
-    # --- 1. PREPARE GEOMETRY CONSTANTS ---
-    # We calculate these once to use for both + and - steps
+    # GEOMETRY
     base_element = ring[CFD]
     length = base_element.Length if getattr(base_element, 'Length', 0) != 0 else 1.0
     
-    # Calculate B0 (Curvature/Field)
-    # Use getattr to be safe if BendingAngle doesn't exist
+    # Bending
     angle = getattr(base_element, 'BendingAngle', 0.0)
     B0 = angle / length
     
@@ -510,15 +582,14 @@ def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
             "sex": x_sex,
             "denergy" : energy
         }
-
-    # --- 3. EXECUTE BOTH SIDES ---
-    # Calculate f(x + step)
+    
+    # Computing perturved states
     state_plus = _get_state(perturbation_sign=+1)
     
-    # Calculate f(x - step)
     state_minus = _get_state(perturbation_sign=-1)
 
-    # --- 4. COMPUTE DERIVATIVES ---
+    # Computing all the derivatives:
+        
     denominator = 2 * step
 
     return {
@@ -586,7 +657,7 @@ def dORM_dCFD(ring, ind ,step, num=None, multithread=False, method="Cor_SVD"):
             results.append(res)
             
     else:
-        results = Parallel(n_jobs=-3, verbose=6)(
+        results = Parallel(n_jobs=-2, verbose=6)(
             delayed(compute_single_CFD)(
                 ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method
             ) for CFD in target_cfds
@@ -685,8 +756,8 @@ def quickdORMdEnergy(ring, ind ,step=0.00001):
             "v": (ORMVnv - ORMVpv) / delta_total}
 
 
-
 def Full_SVD_cor(ring, ind, threshold, original_orbit, ORMH, ORMV, recalc_step=15):
+    #Alternative method to calculate the derivative respecting the feedback condition
     if v: print("Starting Constrained Native RF SVD...")
     max_steps = 30
     

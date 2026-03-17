@@ -104,7 +104,7 @@ dORMV = np.load(os.path.join(results,prefix + "v_numdORM_dq.npy"))
 #Calculating dORM with thick elements and assessing validity
 ###############################################################################
 
-spl = 5 #Number of times the correctors
+spl = 1 #Number of times the correctors
 
 #SPLITTING SEEMS TO MAKE EVERYTHING WORSE SO THERE IS NO POINT!
 def split_el(ring, i, num):
@@ -151,6 +151,7 @@ cORM.cor.broadcasters(2, 3)
 cORM.dip.broadcasters(0, 3)
 
 thickv = np.squeeze(cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.dip))
+
 
 thickv_bo = np.zeros((208,176, 176))
 for i in range(208):

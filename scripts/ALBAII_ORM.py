@@ -125,7 +125,7 @@ cORM.bpm.broadcasters(1, 3)
 cORM.cor.broadcasters(2, 3)
 cORM.quad.broadcasters(0,3)
 cORM.dip.broadcasters(0, 3)
-thickh = cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad) + cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.quad, cORM.dip)
+thickh = cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad) + cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.quad)
 ##########################################################
 
 plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)

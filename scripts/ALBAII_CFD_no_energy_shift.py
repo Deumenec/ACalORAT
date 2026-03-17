@@ -38,7 +38,7 @@ step           =  1e-4
 
 p              ={"lin_all"        :  True,  #To turn off higher order multipoles
                  "max_ind"        :  2,      #Cutoff index in polynomB, simplifies the ring for certain calculations
-                 "calculate"      :  True}
+                 "calculate"      :  False}
 
     
 ###############################################################################
@@ -128,41 +128,41 @@ cORM.diph.average()
 cORM.add_element("corh", ind["cor"]["h"], "h")
 
 #dRijdEnergy_num = numerical.dORMdEnergy(ring, ind)
-dRijdEnergy= cORM.dRij_dEnergy(cORM.bpm, cORM.cor, cORM.allQuad)
+#dRijdEnergy= cORM.dRij_dEnergy(cORM.bpm, cORM.cor, cORM.allQuad)
 dRijdEnergy_quick = numerical.quickdORMdEnergy(ring, ind)
 
 Rij = np.sum( cORM.Rab_thick2_(cORM.bpm, cORM.cor), axis = 0)
 
 #Term corresponding to the quadrupole in CFD with a factor due to the extra change due to change in effective quadrupole because of the change in dipole moment
 Aana_dORM_dCFDV00 = cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.dip)   
-Aana_dORM_dCFDV0 = Aana_dORM_dCFDV00 + cORM.dRij_dCFD_energy(cORM.bpmh, cORM.corh, cORM.diph, dRijdEnergy)    #Term for energy change
-Aana_dORM_energy_term = cORM.dRij_dCFD_energy(cORM.bpmh, cORM.corh, cORM.diph, dRijdEnergy)
+#Aana_dORM_dCFDV0 = Aana_dORM_dCFDV00 + cORM.dRij_dCFD_energy(cORM.bpmh, cORM.corh, cORM.diph, dRijdEnergy)    #Term for energy change
+#Aana_dORM_energy_term = cORM.dRij_dCFD_energy(cORM.bpmh, cORM.corh, cORM.diph, dRijdEnergy)
 #Observem com en aquest cas, la diferència entre la matriu de resposta i la analítica amb només els quadrupols dona matrius proporcionals respecte cada quadrupol          
 
-aatest= num_dORM_dqV-Aana_dORM_dCFDV0[0:10]
+#aatest= num_dORM_dqV-Aana_dORM_dCFDV0[0:10]
 
 #I per exemple:
 
-aatest[0]/aatest[1]
+#aatest[0]/aatest[1]
 
 #Es constant 12 exepte els punts on la resposta és molt petita (error numèric) 
 #Això suggereix que el terme "important" que falta és la derivada respecte l'energia.
 #De fet, podem calcular la constant de proporcionalitat per cada CFD, obtenint una estimació de l'energia
 
-constants0 = num_dORM_dqV/dRijdEnergy
-c0_av = np.average(constants0, axis = (1,2))
-c0_dv = np.std(constants0, axis = (1,2))
+#constants0 = num_dORM_dqV/dRijdEnergy
+#c0_av = np.average(constants0, axis = (1,2))
+#c0_dv = np.std(constants0, axis = (1,2))
 
-constants1 = (num_dORM_dqV-Aana_dORM_dCFDV00[0:10])/dRijdEnergy
-c1_av = np.average(constants1, axis = (1,2))
-c1_dv = np.std(constants1, axis = (1,2))
+#constants1 = (num_dORM_dqV-Aana_dORM_dCFDV00[0:10])/dRijdEnergy
+#c1_av = np.average(constants1, axis = (1,2))
+#c1_dv = np.std(constants1, axis = (1,2))
 
 #Observem com utilitzant aquests canvis d'energia numèrics, podem aconseguir estimacions molt bones!
 
-Aana_dORM_dCFDV1 = Aana_dORM_dCFDV00[0:10] + c1_av[:,None, None]*dRijdEnergy[None, :, :]
+#Aana_dORM_dCFDV1 = Aana_dORM_dCFDV00[0:10] + c1_av[:,None, None]*dRijdEnergy[None, :, :]
 
 #Per comparar la matriu numèrica exacta amb la calculada amb les fórmules de l'òptica
 
 
               
-plot_utils.plot_both_Zeus(num_dORM_dqV, num_dORM_dqV,Aana_dORM_dCFDV0[0:10] , Aana_dORM_dCFDV1) #THE CHANGE IN ENERGY IS REALLY NOISY but who cares ):
+#plot_utils.plot_both_Zeus(num_dORM_dqV, num_dORM_dqV,Aana_dORM_dCFDV0[0:10] , Aana_dORM_dCFDV1) #THE CHANGE IN ENERGY IS REALLY NOISY but who cares ):

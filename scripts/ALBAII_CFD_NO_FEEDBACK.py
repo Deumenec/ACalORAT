@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Fri Mar  6 12:54:20 2026
+Created on Mar Mar  12 12:02:20 2026
 
 @author: deumenec
 
-Code testing if the formula for the Orbit Response Matrix is working well to consider the quadrupole component of
-adjusting combined function dipoles.
+Code testing if the formula for the Orbit Response Matrix is working well for
+CFDs changing both quad and dipole moment as fixed by the required ratio!
+
 """
 
 import os
@@ -22,7 +23,7 @@ from ACalORAT import AnaORM
 from ACalORAT import plot_utils
 
 ROOT = Path(__file__).resolve().parent.parent
-SAVE = ROOT / "outputs" / "ALBAII_CFD_NOFEEDBACK"
+SAVE = ROOT / "outputs" / "ALBAII_CFD_NOFEEDBACK_YES_BEND"
 
 ###############################################################################
 # Parameters to pass for the calculations                                     #
@@ -36,11 +37,9 @@ direction      = 'h' #v: vertical h: horizontal (SI NOMÉS ES FA EL CÀLCUL D'UN
 step_exp       =  5
 step           =  10**(-step_exp)
 read_numerical =  True
-dispersion     =  True  #Important ja que sino tot petaria amb la cromaticitat! calcular les matrius amb dispersió.
-lin_all        =  False  #To turn off higher order multipoles
+dispersion     =  False  #Important ja que sino tot petaria amb la cromaticitat! calcular les matrius amb dispersió.
+lin_all        =  True  #To turn off higher order multipoles
 max_ind        =  2     #cutoff index in polynomB
-calc_dq        =  True
-
 
 ###############################################################################
 # Reading the lattice parameters
@@ -89,12 +88,11 @@ for i in ind["cor"]["v"]: ring[i].KickAngle = np.array([0,0])
 if read_numerical == False:
     #I add kick angle variable to perform the numerical ORM calculation
     #IMPORTANT, add ind_cor[sub_direction] for ALBA2
-    if calc_dq:
-        for i in ind["cor"]["h"]: ring[i].KickAngle = np.array([0,0])
-        #numerical_ORM = numerical.dORM_dq(ring, ind["bpm"], ind["cor"]["h"], ind["CFD"], step, "h")
-        #np.save(os.path.join(results,prefix +"h_numdORM_dq"),numerical_ORM)
-        numerical_ORM = numerical.dORM_dq(ring, ind["bpm"], ind["cor"]["v"], ind["CFD"], step, "v")
-        np.save(os.path.join(results,prefix +"v_numdORM_dq"),numerical_ORM)
+    for i in ind["cor"]["h"]: ring[i].KickAngle = np.array([0,0])
+    numerical_ORM = numerical.dORM_dq_pure(ring, ind["bpm"], ind["cor"]["h"], ind["CFD"], step, "h")
+    np.save(os.path.join(results,prefix +"h_numdORM_dq"),numerical_ORM)
+    numerical_ORM = numerical.dORM_dq_pure(ring, ind["bpm"], ind["cor"]["v"], ind["CFD"], step, "v")
+    np.save(os.path.join(results,prefix +"v_numdORM_dq"),numerical_ORM)
 
 
 dORMH = np.load(os.path.join(results,prefix + "h_numdORM_dq.npy"))
@@ -104,30 +102,52 @@ dORMV = np.load(os.path.join(results,prefix + "v_numdORM_dq.npy"))
 #Calculating dORM with thick elements and assessing validity
 ###############################################################################
 
-cORM = AnaORM.AnaORM(ring,"v", ind)
-cORM.assign_optics()
-cORM.bpm.broadcasters(1, 3)
-cORM.cor.broadcasters(2, 3)
-cORM.dip.broadcasters(0, 3)
+#Energy response without sextupoles!
 
-thickv = np.squeeze(cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip))
+dRij_dEnergy = numerical.quickdORMdEnergy(ring, ind)
 
 
-###### Example calculating the dORM_dq with thin and thick elements!
 cORM = AnaORM.AnaORM(ring,"h", ind)
 cORM.assign_optics()
-cORM.dip2 = copy.deepcopy(cORM.dip)
-cORM.quad.correct_strength()#Acounts for the fact that 
-cORM.bpm.broadcasters(1, 3)
-cORM.cor.broadcasters(2, 3)
-cORM.dip.broadcasters(0, 3)
+cORM.bpm.broadcasters(0, 3)
+cORM.cor.broadcasters(1, 3)
+cORM.CFD.broadcasters(2, 3)
+
+denergy = cORM.ddip_denergy(cORM.dip)
+
+
+thickh = (cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.CFD) 
+          + 0*cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.CFD)
+          + cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["h"], denergy)) 
 
 
 
-thickh = np.squeeze(cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip)) - cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.dip, cORM.dip2)
 
+
+cORM = AnaORM.AnaORM(ring,"v", ind)
+cORM.assign_optics()
+cORM.bpm.broadcasters(0, 3)
+cORM.cor.broadcasters(1, 3)
+cORM.dip.broadcasters(2, 3)
+
+thickv = (cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip)
+          + cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["v"], denergy)
+          - cORM.dRij_dk_fringe(cORM.bpm, cORM.cor, cORM.dip))
+
+aa = cORM.dRij_dk_fringe(cORM.bpm, cORM.cor, cORM.dip)
 
 ##########################################################
+# Comparisons
+##########################################################
+dORMV = np.transpose(dORMV, (2,1,0))
+dORMH = np.transpose(dORMH, (2,1,0))
+
+
+##TESTS###
+dORMV = np.transpose(dORMV, (2,1,0))
+dORMH = np.transpose(dORMH, (2,1,0))
+thickv = np.transpose(thickv, (2,1,0))
+thickh = np.transpose(thickh, (2,1,0))
 
 plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
 

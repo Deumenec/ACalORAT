@@ -48,7 +48,7 @@ def get_mcf(ring):
 lattice_file   = 'ring_a2.mat' #Read ALBA II lattice ring_a2.mat or THERING.mat to read the ALBA one
 results        = 'A2' #A1 for the ALBA lattice and A2 for the ALBAII lattice and CFDA2
 direction      = 'v' #v: vertical h: horizontal (SI NOMÉS ES FA EL CÀLCUL D'UNA)
-step_exp       =  5
+step_exp       =  6
 step           =  10**(-step_exp)
 read_numerical =  True
 dispersion     =  True  #Important ja que sino tot petaria amb la cromaticitat! calcular les matrius amb dispersió.
@@ -124,20 +124,19 @@ def disp_i_dk(disp_i, ring, quad, step):
     
     return (new_disp_i-new_disp_j)/(2*step)
 
-di_dk = np.zeros((len(ind["quad"]),len(ind["bpm"]))) 
+di_dk = np.zeros((len(ind["dip"]),len(ind["bpm"]))) 
 
 if False:
-    for i in range(len(ind["quad"])):
-        di_dk[i] = disp_i_dk(dispReal, ring, ind["quad"][i], step)
+    for i in range(len(ind["dip"])):
+        di_dk[i] = disp_i_dk(dispReal, ring, ind["dip"][i], step)
     np.save("di_dk",di_dk )
     
 di_dk = np.load("di_dk.npy")
 
 
-
 #CODE TO SPLIT ELEMENTS TO TEST THE ANALYTICAL FORMUMA!
 
-spl = 1 #Number of times the correctors
+spl = 3 #Number of times the correctors
 
 
 
@@ -235,4 +234,34 @@ cORM.dip.broadcasters(2, 3)
 
 di_dk_ana = cORM.dni_dqk_sum_mod(cORM.bpm, cORM.dip, cORM.quad)
 
-di_dk_new = cORM.dni_dqk_new(cORM.bpm, cORM.quad)
+
+cORM = AnaORM.AnaORM(ring,"h" ,ind)
+cORM.assign_optics()
+cORM.dip.correct_entrance()
+cORM.dip.correct_strength()
+cORM.bpm.broadcasters(1, 2)
+cORM.dip.broadcasters(0, 2)
+
+
+di_dk_new = cORM.dni_dqk_new(cORM.bpm, cORM.dip)
+
+di_dk_new_bo = np.zeros((208, 176))
+for i in range(208):
+    di_dk_new_bo[i] = np.sum(di_dk_new[i*spl:(i+1)*spl, :], axis = 0)
+    
+
+
+
+#########TEST USING THE NEW INTEGRAL FORMULA FOR DISPERSION DERIVATIVE
+ring, ind = read.ALBAII(lattice_path)
+
+cORM2 =  AnaORM.AnaORM(ring,"h" ,ind)
+cORM2.assign_optics()
+cORM2.CFD.correct_entrance()
+cORM2.bpm.broadcasters(1, 2)
+cORM2.CFD.broadcasters(0, 2)
+di_dk_anacool = cORM2.dni_dqk_integral(cORM2.bpm, cORM2.CFD)
+
+aa = di_dk_anacool/di_dk
+a_error = (di_dk_anacool- di_dk)/di_dk*100
+a_com = math_utils.tensorComparison(di_dk, di_dk_anacool, (0,1))

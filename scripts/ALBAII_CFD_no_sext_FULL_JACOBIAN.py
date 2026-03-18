@@ -73,7 +73,7 @@ pathCFD = "Cor_SVD"
 if  p["calculate"]:
     if not os.path.exists(SAVE / pathCFD):
         os.mkdir(SAVE / pathCFD)
-    num_dORM_dqH, num_dORM_dqV, dFreq_dCFD, dKicksH_dCFD, dKicksV_dCFD, x_sex, energy = numerical.dORM_dCFD(ring, ind, step ,multithread=True, method="Cor_SVD", num = 50) #In ALBAII all dipoles are CFD!
+    num_dORM_dqH, num_dORM_dqV, dFreq_dCFD, dKicksH_dCFD, dKicksV_dCFD, x_sex, energy = numerical.dORM_dCFD(ring, ind, step ,multithread=True, method="Cor_SVD") #In ALBAII all dipoles are CFD!
     np.save(SAVE /pathCFD /"num_dORM_dqH",num_dORM_dqH)
     np.save(SAVE /pathCFD /"num_dORM_dqV",num_dORM_dqV)
     np.save(SAVE /pathCFD /"dFreq_dCFD",dFreq_dCFD)
@@ -114,7 +114,7 @@ denergy = cORM.dCFD_denergy(cORM.bpm, cORM.cor, cORM.dip)
 
 #Sembla malament l'horitzontal total fet així!
 thickh = ( cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip) 
-          + cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.dip)
+          + cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.dip) #Aquí aquest terme ajuda però falta bastanta cosa!!!
           + cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["h"], denergy))
 
 
@@ -141,9 +141,13 @@ thickv = (cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip)
 # Validation plot
 ##########################################################
 
-num_dORM_dqV = np.transpose(num_dORM_dqV, (2,1,0))
-num_dORM_dqH = np.transpose(num_dORM_dqH, (2,1,0))
-plot_utils.plot_both_Zeus(num_dORM_dqV, num_dORM_dqH, thickv[:, :, 0:50], thickh[:, :, 0:50])
+#Importat to keep the correct broadcasting dimensions!
+
+thickv = np.transpose(thickv, (2,0,1))
+thickh = np.transpose(thickh, (2,0,1))
+
+#La vertical sembla que està bastant aprop!
+plot_utils.plot_both_Zeus(num_dORM_dqV, num_dORM_dqH, thickv, thickh)
 
 
 

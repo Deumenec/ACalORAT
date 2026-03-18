@@ -140,8 +140,26 @@ aa = cORM.dRij_dk_fringe(cORM.bpm, cORM.cor, cORM.dip)
 ##########################################################
 # Comparisons
 ##########################################################
-dORMV = np.transpose(dORMV, (1,2,0))
-dORMH = np.transpose(dORMH, (1,2,0))
+
+thickv = np.transpose(thickv, (2,0,1))
+thickh = np.transpose(thickh, (2,0,1))
+
+thickv = np.transpose(thickv, (2,0,1))
+thickh = np.transpose(thickh, (2,0,1))
+dORMV  = np.transpose(dORMV, (2,0,1))
+dORMH  = np.transpose(dORMH, (2,0,1))
 
 
 plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
+
+plt.plot()
+
+
+
+
+
+
+
+
+
+

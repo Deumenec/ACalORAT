@@ -750,6 +750,7 @@ def quickdORMdEnergy(ring, ind ,step=0.00001):
     cORM_nh.bpm.broadcasters(0, 2)
     cORM_nh.cor.broadcasters(1, 2)
     ORMVnh = cORM_nh.Rab_thick2_(cORM_nh.bpm, cORM_nh.cor) + cORM_nh.Rab_thick2_disp(cORM_nh.bpm, cORM_nh.cor)
+    
     #Per la definició de l'energia, aquí la derivada es calcula al revés!
     #TODO: justificar bé si es vol
     return {"h": (ORMVnh - ORMVph) / delta_total, 

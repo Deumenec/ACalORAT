@@ -38,7 +38,7 @@ step           =  1e-5
 
 p              ={"lin_all"        :  True,  #To turn off higher order multipoles
                  "max_ind"        :  2,      #Cutoff index in polynomB, simplifies the ring for certain calculations
-                 "calculate"      :  False}
+                 "calculate"      :  True}
 
 
 ###############################################################################

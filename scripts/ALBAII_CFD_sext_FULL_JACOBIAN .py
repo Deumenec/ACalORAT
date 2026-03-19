@@ -21,7 +21,7 @@ from ACalORAT import plot_utils
 
 ROOT = Path(__file__).resolve().parent.parent
 
-SAVE = ROOT / "outputs" / "ALBAII_CFD_no_sext"
+SAVE = ROOT / "outputs" / "ALBAII_CFD_sext"
 
 os.chdir(ROOT)
 if not os.path.exists(SAVE):
@@ -38,7 +38,7 @@ step           =  1e-5
 
 p              ={"lin_all"        :  False,  #To turn off higher order multipoles
                  "max_ind"        :  2,      #Cutoff index in polynomB, simplifies the ring for certain calculations
-                 "calculate"      :  True}
+                 "calculate"      :  False}
 
 
 ###############################################################################

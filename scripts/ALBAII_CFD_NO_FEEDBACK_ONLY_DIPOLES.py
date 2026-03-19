@@ -152,7 +152,6 @@ dORMH  = np.transpose(dORMH, (2,0,1))
 
 plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
 
-plt.plot()
 
 
 

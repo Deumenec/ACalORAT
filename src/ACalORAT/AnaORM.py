@@ -58,6 +58,7 @@ class Elements:
         if hasattr(ring[ind[0]], "BendingAngle"):self.Bend = np.array([ring[i].BendingAngle for i in ind])
         if hasattr(ring[ind[0]], "Length"):      self.Length = np.array([ring[i].Length for i in ind])
         if (hasattr(ring[ind[0]], "PolynomB" ) and len(ring[ind[0]].PolynomB) >=2):  self.K = np.array([-sgn*ring[i].PolynomB[1] for i in ind], dtype= complex)
+        if (hasattr(ring[ind[0]], "PolynomB" ) and len(ring[ind[0]].PolynomB) >=3):  self.S = np.array([-sgn*ring[i].PolynomB[2] for i in ind], dtype= complex)
         if hasattr(ring[ind[0]], "EntranceAngle"): self.EntranceAngle = np.array([ring[i].EntranceAngle for i in ind], dtype= complex)   
         if hasattr(ring[ind[0]], "ExitAngle"): self.ExitAngle = np.array([ring[i].ExitAngle for i in ind], dtype= complex)   
     
@@ -269,8 +270,72 @@ class AnaORM:
         """Integral term for elements WITH quadrupole moment inside divided by the length of the elmeent"""
         return -(np.cos(np.sqrt(Ej.KB)*Ej.LengthB)-1)/(Ej.KB*Ej.betaB*Ej.LengthB)
     
-
+    #MORE INTEGRAL TERMS FOR SEXTUPOLES!
+    
+    def Ilk0(self, El: Elements, i, j, k):
+        """Integral of the derivative of displacement in its broadcasting dimensions
         
+        Derivative of paramaeters governing the closed orbit inside of the sextupole
+        with already the correct broadcasting dimensions
+        i = dx_l/dqk
+        j = dx_l'/dqk
+        k = dtheta_l/dqk
+        
+        OBSERVATION: COLLECTING with respect to a, b, c would reduce the total number of operations!
+        """
+        
+        a = El.alphaB
+        b = El.betaB
+        c = El.gammaB
+        L = El.LengthB
+        s = El.SB
+        
+        return s*(1/20*(5*c*j + 2*c*k)*L**4 + 1/12*(4*c*i - 8*a*j - 3*a*k)*L**3 - 1/6*(6*a*i - 3*b*j - b*k)*L**2 + L*b*i)
+     
+    def Ilkc2(self, El: Elements, i, j, k):
+        """Integral of the derivative of displacement in its broadcasting dimensions
+        
+        Derivative of paramaeters governing the closed orbit inside of the sextupole
+        with already the correct broadcasting dimensions
+        i = dx_l/dqk
+        j = dx_l'/dqk
+        k = dtheta_l/dqk
+        
+        OBSERVATION: COLLECTING with respect to a, b, c would reduce the total number of operations!
+        """
+        
+        a = El.alphaB
+        b = El.betaB
+        c = El.gammaB
+        L = El.LengthB
+        s = El.SB
+        
+        return s*(1/20*(5*c*j + 2*c*k - 10*j/b - 4*k/b)*L**4 + 1/12*(4*c*i - 8*a*j - 3*a*k - 8*i/b)*L**3 - 1/6*(6*a*i - 3*b*j - b*k)*L**2 + L*b*i)
+        
+    def Ilks2(self, El: Elements, i, j, k):
+        """Integral of the derivative of displacement in its broadcasting dimensions
+        
+        
+        Derivative of paramaeters governing the closed orbit inside of the sextupole
+        with already the correct broadcasting dimensions
+        i = dx_l/dqk
+        j = dx_l'/dqk
+        k = dtheta_l/dqk
+        
+
+        OBSERVATION: COLLECTING with respect to a, b, c would reduce the total number of operations!
+        """
+        
+        a = El.alphaB
+        b = El.betaB
+        c = El.gammaB
+        L = El.LengthB
+        s = El.SB
+        
+        return s*(-1/5*L**4*(5*a*j/b + 2*a*k/b) - 1/6*L**3*(8*a*i/b - 8*j - 3*k) + 2*L**2*i)
+        
+    
+    
     def dRij_dqk_thin(self, Ei : Elements, Ej : Elements, Ek : Elements):
         """Considers all elements as thin, results can be greatlly improved by passing average
         optics computed with the average method instead of the entrance optics, but for thick
@@ -809,10 +874,14 @@ class AnaORM:
         """
         Orbit displacement in sextupoles ENTRANCE
             Class       Broadcast dim
-        Ei: bpms        (1,4)    n
+        Ei: bpms        (0,4)    n
         Ej: cor         (1,4)    m
         Ek: CFD         (2,4)    k
         Es: sextupoles  (3,4)    l
+        
+        Returns:
+            axis 0: CFD
+            axis 1: sextupole
         """
     
         # 1. Extract Optics averages
@@ -845,7 +914,27 @@ class AnaORM:
         term3 = num * d_e_non
         
         dxs = ((-term1 + term2 + term3) * geometry[None,:]).T
-        return dxs
+        
+        return np.real(dxs)
+    
+    def dpxldCFDk(self, Ei: Elements, Ej: Elements, Ek: Elements, El: Elements):
+        """
+        Calculates the derivative of the orbit transverse derivative with 
+        respect to CDF activation by SUPOSING THERE IS A DRIFT before the
+        sextupole and using the numerical derivative inside of it
+        
+        Returns:
+            axis 0: CFD
+            axis 1: sextupole
+        """
+        
+        El0 = Elements(self.ring, self.all_optics, El._ind-1, self.dir_ind, self.sgn)
+        El0.broadcasters(El._bAxis, El._ndim)
+        
+        x1 = self.dxldCFDk(Ei, Ej, Ek, El)
+        x0 = self.dxldCFDk(Ei, Ej, Ek, El0)
+        
+        return (x0-x1)/El0.Length[None, :]
     
     def average_dxsexdCFD(self, Ei: Elements, Ej: Elements, Ek: Elements, El: Elements, El0:Elements):
         """
@@ -863,8 +952,7 @@ class AnaORM:
         #Derivative calculated by considering the drift before!
         dx = (x-self.dxldCFDk(Ei, Ej, Ek, El0))/El0.Length
         
-        #Contribution due to the new kick inside of the corrector changing the closed orbit
-        #TODO!!!
+        
         
         return x + dx*El.Length
     
@@ -882,7 +970,60 @@ class AnaORM:
         
         return np.sum(np.sqrt(Ei.betaB)/(2*np.sin(np.pi*self.tune))*Ed.BendB/Ed.LengthB * (Ilc1*Cil1+Ils1*Sil1), axis = Ed._bAxis)
     
+    def dRi_dk_sex_term(self, Ei: Elements, Ej: Elements, Ek: Elements, El: Elements, i, j, k):
+        """
+        Ei: bpms
+        Ej: correctors
+        Ek: CFDs
+        El: sextupoles
+        
+        Calculates the term of the jacobian of the ORM considering the effective quadrupole created in sextupoles due to closed orbit distortion
+        """
+        #General cosinus terms
+        Cij1 = np.sum(self.Cabn(Ei, Ej, 1), axis = El._bAxis)
+        Sij1 = np.sum(self.Sabn(Ei, Ej, 1), axis = El._bAxis)
 
+        
+        #Terms for thick sextupoles and mixing integrals
+        Sil2 = self.Sabn(Ei, El, 2)
+        Cil2 = self.Cabn(Ei, El, 2)
+        Sjl2 = self.Sabn(Ej, El, 2)
+        Cjl2 = self.Cabn(Ej, El, 2)
+        Ilk0  = self.Ilk0(El, i, j, k)
+        Ilkc2 = self.Ilkc2(El, i, j, k) 
+        Ilks2 = self.Ilks2(El, i, j, k)
+        
+        SSilk2 = np.sum(Ilkc2*Sil2 - Ilks2*Cil2, axis = El._bAxis)
+        CCilk2 = np.sum(Ilkc2*Cil2 + Ilks2*Sil2, axis = El._bAxis)
+        #Talk with Zeus if this term is necessary!
+        #DDilk2 = np.sum(Ilk0*np.heaviside(Ei.phiB-El.phiB), axis = El._bAxis)
+        
+        SSjlk2 = np.sum(Ilkc2*Sjl2 - Ilks2*Cjl2, axis = El._bAxis)
+        CCjlk2 = np.sum(Ilkc2*Cjl2 + Ilks2*Sjl2, axis = El._bAxis)
+        #IDEM
+        #DDjlk2 = np.sum(Ilk0*np.heaviside(Ej.phiB-El.phiB), axis = El._bAxis)
+        
+        #Terms for thick correctors without quadrupole moment inside of them
+        Ijc1_L = self.Ikc1_(Ej)
+        Ijs1_L = self.Iks1_(Ej)
+    
+        #In the final sum, the broadcasting dimension for all sextupoles has already been contracted
+        Ilk0_term0 = np.sum(Ilk0*(2*np.heaviside(Ei.muB-Ek.muB, 0) -2*np.heaviside(Ej.muB-Ek.muB, 0)-np.sign(Ei.muB-Ej.muB)), axis = El._bAxis)
+        Ilk0_term0 = np.sum(Ilk0*(2*np.heaviside(Ei.muB-Ek.muB, 0) -2*np.heaviside(Ej.muB-Ek.muB, 0)-np.sign(Ei.muB-Ej.muB)), axis = El._bAxis)
+        
+        dRij_terms =  (Cij1 * ( CCilk2 + CCjlk2 + 2*Ilk0 *np.cos(np.pi * self.tune)**2) + 
+                       Sij1 * ( SSilk2 - SSjlk2 + Ilk0_term0*np.sin(2*np.pi*self.tune))) 
+        dTij_terms = (Sij1 * (CCilk2 - CCjlk2 + 2*Ilk0 * np.cos(np.pi * self.tune)**2) + 
+                      Cij1 * (-SSjlk2 - SSilk2 + Ilk0 * np.sin(2*np.pi * self.tune) * (-2*np.heaviside(Ei.muB-Ek.muB, 0) 
+                           + 2*np.heaviside(Ej.muB-Ek.muB, 0) + np.sign(Ei.muB-Ej.muB))))
+        
+        ana_dORM_dq = self.sgn * ( np.sqrt(Ei.betaB * Ej.betaB) 
+         / (8 * np.sin(np.pi * self.tune)* np.sin(2 * np.pi * self.tune)) 
+         * (Ijc1_L * dRij_terms + Ijs1_L * dTij_terms))
+        
+        return np.real(ana_dORM_dq) #Per assegurar que retorni un real bé
+    
+    
     def aMCF(self, Em: Elements,En: Elements):
         """Calculates the mcf for a ring due to dipoles
         Diples in the first and second component analytically

@@ -38,7 +38,7 @@ step           =  1e-5
 
 p              ={"lin_all"        :  False,  #To turn off higher order multipoles
                  "max_ind"        :  2,      #Cutoff index in polynomB, simplifies the ring for certain calculations
-                 "calculate"      :  True}
+                 "calculate"      :  False}
 
 
 ###############################################################################
@@ -104,22 +104,43 @@ dRij_dEnergy = numerical.quickdORMdEnergy(ring, ind)
 
 cORM = AnaORM.AnaORM(ring,"h", ind)
 cORM.assign_optics()
-cORM.dip.correct_entrance()
 cORM.bpm.broadcasters(0, 3)
 cORM.cor.broadcasters(1, 3)
 cORM.dip.broadcasters(2, 3)
 
-#This term is also needed for vertical!
+#We also use the horizontal response calculations to get the necessary information
+#For the vertical calculations: the energy change, sextupole orbit change
+#sextupole orbit derivative change and corrector activation
 denergy = cORM.dCFD_denergy(cORM.bpm, cORM.cor, cORM.dip)
+#TODO: Write and validate dkicksH
 
+cORM.bpm.broadcasters(0, 4)
+cORM.cor.broadcasters(1, 4)
+cORM.dip.broadcasters(2, 4)
+cORM.sex.broadcasters(3, 4)
+
+x_sex_ana  = cORM.dxldCFDk(cORM.bpm, cORM.cor, cORM.dip, cORM.sex)
+dx_sex_ana = cORM.dpxldCFDk(cORM.bpm, cORM.cor, cORM.dip, cORM.sex)
+#TODO: write the theta the theta
+dtheta_sex = np.zeros((len(ind["dip"]), len(ind["sex"])))
+
+#Put the relevant constants in the right broadcasting dimensions
+x_sex_ana  = x_sex_ana[None, None, :, :]
+dx_sex_ana = dx_sex_ana[None, None, :, :]
+dtheta_sex = dtheta_sex[None, None, :, :]
+
+#Revert broadcasters
+cORM.bpm.broadcasters(0, 3)
+cORM.cor.broadcasters(1, 3)
+cORM.dip.broadcasters(2, 3)
 #Sembla malament l'horitzontal total fet així!
 thickh = ( cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip) 
           + cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.dip) #Aquí aquest terme ajuda però falta bastanta cosa!!!
           + cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["h"], denergy))
 
-
+#TODO: Write the sextupole term in here!
 #Vertical derivative calculation:
-    
+
 cORM = AnaORM.AnaORM(ring,"v", ind)
 cORM.assign_optics()
 cORM.dip.correct_entrance()
@@ -135,7 +156,15 @@ cORM.dip.broadcasters(2, 3)
 thickv = (cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip) 
           + cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["v"], denergy))
 
+#Finally, we add the sextupole term by rebuilding the broadcasters
 
+cORM.bpm.broadcasters(0, 4)
+cORM.cor.broadcasters(1, 4)
+cORM.dip.broadcasters(2, 4)
+cORM.sex.broadcasters(3, 4)
+
+
+thickv += cORM.dRi_dk_sex_term(cORM.bpm, cORM.cor, cORM.dip, cORM.sex, x_sex_ana, dx_sex_ana, dtheta_sex)
 
 ##########################################################
 # Validation plot

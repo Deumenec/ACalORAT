@@ -38,7 +38,7 @@ step           =  1e-5
 
 p              ={"lin_all"        :  False,  #To turn off higher order multipoles
                  "max_ind"        :  2,      #Cutoff index in polynomB, simplifies the ring for certain calculations
-                 "calculate"      :  True}
+                 "calculate"      :  False}
 
 
 ###############################################################################
@@ -138,6 +138,16 @@ thickh = ( cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip)
           + cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.dip) #Aquí aquest terme ajuda però falta bastanta cosa!!!
           + cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["h"], denergy))
 
+
+cORM.bpm.broadcasters(0, 4)
+cORM.cor.broadcasters(1, 4)
+cORM.dip.broadcasters(2, 4)
+cORM.sex.broadcasters(3, 4)
+
+
+AAGOATh = cORM.dRi_dk_sex_term(cORM.bpm, cORM.cor, cORM.dip, cORM.sex, x_sex_ana, dx_sex_ana, dtheta_sex)
+
+
 #TODO: Write the sextupole term in here!
 #Vertical derivative calculation:
 
@@ -149,7 +159,7 @@ cORM.cor.broadcasters(1, 3)
 cORM.dip.broadcasters(2, 3)
 
 #La formula validada per els CFD que prediu perfecte el canvi amb la component quadrupolar
-#Més el terme corresponent a la variació de l'energia, recordem que aquí les dimensions de
+#Més el terme corresponent a la vari44ació de l'energia, recordem que aquí les dimensions de
 #Broadcasting estàn hard-coded així que millor no tocar res sense validar
 
 
@@ -164,7 +174,7 @@ cORM.dip.broadcasters(2, 4)
 cORM.sex.broadcasters(3, 4)
 
 
-AAGOAT = cORM.dRi_dk_sex_term(cORM.bpm, cORM.cor, cORM.dip, cORM.sex, x_sex_ana, dx_sex_ana, dtheta_sex)
+AAGOATv = cORM.dRi_dk_sex_term(cORM.bpm, cORM.cor, cORM.dip, cORM.sex, x_sex_ana, dx_sex_ana, dtheta_sex)
 
 
 

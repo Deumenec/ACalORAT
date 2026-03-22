@@ -515,7 +515,7 @@ def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
     """
     Computes derivatives using Central Difference (f(x+h) - f(x-h)) / 2h.
     """
-
+    print("HOLAAAAAA")
     # GEOMETRY
     base_element = ring[CFD]
     length = base_element.Length if getattr(base_element, 'Length', 0) != 0 else 1.0
@@ -648,6 +648,7 @@ def dORM_dCFD(ring, ind ,step, num=None, multithread=False, method="Cor_SVD"):
     
     #Orbit at sextupoles for tracking results
     x_sex = np.zeros((n_calcs, len(ind["sex"])))
+    dx_sex = np.zeros((n_calcs, len(ind["sex"])))
     energy = np.zeros(n_calcs)
     
     # 3. Execution (Single vs Multi-thread)
@@ -673,11 +674,12 @@ def dORM_dCFD(ring, ind ,step, num=None, multithread=False, method="Cor_SVD"):
         dFreq_dCFD[i]   = res["dFreq"]
         dKicksH_dCFD[i] = res["dKicks_h"]
         dKicksV_dCFD[i] = res["dKicks_v"]
-        x_sex[i]        = res["dsex"]
+        x_sex[i]        = res["dsex"]["0"]
+        dx_sex[i]        = res["dsex"]["1"]
         energy[i]       = res["denergy"]
       
     print("Calculation Finished.")
-    return num_dORM_dqH, num_dORM_dqV, dFreq_dCFD, dKicksH_dCFD, dKicksV_dCFD, x_sex, energy
+    return num_dORM_dqH, num_dORM_dqV, dFreq_dCFD, dKicksH_dCFD, dKicksV_dCFD, x_sex, dx_sex,energy
 
 def ORM(ring, ind, direction = "v"):
     #Checked that further limit produces no significant change.

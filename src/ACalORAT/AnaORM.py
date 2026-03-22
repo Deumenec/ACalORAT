@@ -867,10 +867,12 @@ class AnaORM:
         transverse dimension when changing the dipole component of a CFD. It is scaled for
         a proportional change to the quadrupole!
         
+        #TODO: THIS METHOD DOES NOT WORK!
         Ei: BPMs,         1
         Ej: correctors,   2
         Ek: CFDs,         0
         """
+        
         geometry = Ek.BendB / (Ek.KB)
         
         dni_dbend = Ek.LengthB * self.Rab_thick2_K(Ei, Ek) 
@@ -984,7 +986,7 @@ class AnaORM:
         x1 = self.dxldCFDk(Ei, Ej, Ek, El)
         x0 = self.dxldCFDk(Ei, Ej, Ek, El0)
         
-        return (x0-x1)/El0.Length[None, :]
+        return (x1-x0)/El0.Length[None, :]
     
     def average_dxsexdCFD(self, Ei: Elements, Ej: Elements, Ek: Elements, El: Elements, El0:Elements):
         """

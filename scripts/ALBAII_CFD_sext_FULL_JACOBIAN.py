@@ -32,13 +32,14 @@ if not os.path.exists(SAVE):
 ###############################################################################
 
 
+
 lattice_file   = 'ring_a2.mat' #Read ALBA II lattice ring_a2.mat or THERING.mat to read the ALBA one
 results        = 'A2' #A1 for the ALBA lattice and A2 for the ALBAII lattice and CFDA2
-step           =  1e-5
+step           =  1e-6
 
 p              ={"lin_all"        :  False,  #To turn off higher order multipoles
                  "max_ind"        :  2,      #Cutoff index in polynomB, simplifies the ring for certain calculations
-                 "calculate"      :  False}
+                 "calculate"      :  True}
 
 
 ###############################################################################
@@ -47,7 +48,8 @@ p              ={"lin_all"        :  False,  #To turn off higher order multipole
 
 ring, ind = read.ALBAII(ROOT  / "data" / "ring_a2.mat")
 
-    
+ind["dip"] = ind["dip"][0:10]
+
 if p["lin_all"] == True: #DESACTIVA TOTS ELS Sextupols i ordres superiors 
     for element in filter(at.checkattr("PolynomB"), ring):
         #print(element.FamName)
@@ -73,13 +75,14 @@ pathCFD = "Cor_SVD"
 if  p["calculate"]:
     if not os.path.exists(SAVE / pathCFD):
         os.mkdir(SAVE / pathCFD)
-    num_dORM_dqH, num_dORM_dqV, dFreq_dCFD, dKicksH_dCFD, dKicksV_dCFD, x_sex, energy = numerical.dORM_dCFD(ring, ind, step ,multithread=True, method="Cor_SVD") #In ALBAII all dipoles are CFD!
+    num_dORM_dqH, num_dORM_dqV, dFreq_dCFD, dKicksH_dCFD, dKicksV_dCFD, x_sex,dx_sex , energy = numerical.dORM_dCFD(ring, ind, step ,multithread=True, method="Cor_SVD") #In ALBAII all dipoles are CFD!
     np.save(SAVE /pathCFD /"num_dORM_dqH",num_dORM_dqH)
     np.save(SAVE /pathCFD /"num_dORM_dqV",num_dORM_dqV)
     np.save(SAVE /pathCFD /"dFreq_dCFD",dFreq_dCFD)
     np.save(SAVE /pathCFD /"dKicksH_dCFD",dKicksH_dCFD)
     np.save(SAVE /pathCFD /"dKicksV_dCFD",dKicksV_dCFD)
     np.save(SAVE /pathCFD /"x_sex",x_sex)
+    np.save(SAVE /pathCFD /"dx_sex",dx_sex)
     np.save(SAVE /pathCFD /"energy",energy)
     
 
@@ -91,6 +94,7 @@ else:
         dKicksH_dCFD = np.load(SAVE /pathCFD /"dKicksH_dCFD.npy")
         dKicksV_dCFD = np.load(SAVE /pathCFD /"dKicksV_dCFD.npy")
         x_sex        = np.load(SAVE /pathCFD /"x_sex.npy")
+        dx_sex        = np.load(SAVE /pathCFD /"dx_sex.npy")
         energy       = np.load(SAVE /pathCFD /"energy.npy")
     except:
         raise ImportError("No hi ha respostes calculades")
@@ -186,7 +190,8 @@ AAGOATv = cORM.dRi_dk_sex_term(cORM.bpm, cORM.cor, cORM.dip, cORM.sex, x_sex_ana
 
 thickv = np.transpose(thickv, (2,0,1))
 thickh = np.transpose(thickh, (2,0,1))
-AAGOAT = np.transpose(AAGOAT, (2,0,1))
+AAGOATv = np.transpose(AAGOATv, (2,0,1))
+AAGOATh = np.transpose(AAGOATh, (2,0,1))
 #La vertical sembla que està bastant aprop!
 plot_utils.plot_both_Zeus(num_dORM_dqV, num_dORM_dqH, thickv, thickh)
 

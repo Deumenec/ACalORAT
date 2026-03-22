@@ -38,7 +38,7 @@ step           =  1e-5
 
 p              ={"lin_all"        :  False,  #To turn off higher order multipoles
                  "max_ind"        :  2,      #Cutoff index in polynomB, simplifies the ring for certain calculations
-                 "calculate"      :  False}
+                 "calculate"      :  True}
 
 
 ###############################################################################
@@ -121,8 +121,8 @@ cORM.sex.broadcasters(3, 4)
 
 x_sex_ana  = cORM.dxldCFDk(cORM.bpm, cORM.cor, cORM.dip, cORM.sex)
 dx_sex_ana = cORM.dpxldCFDk(cORM.bpm, cORM.cor, cORM.dip, cORM.sex)
-#TODO: write the theta the theta
-dtheta_sex = np.zeros((len(ind["dip"]), len(ind["sex"])))
+#TODO: write the theta the theta analytically and validate!
+dtheta_sex = AnaORM.extract_kicks(dKicksH_dCFD,ind["cor"]["h"], ind["sex"])
 
 #Put the relevant constants in the right broadcasting dimensions
 x_sex_ana  = x_sex_ana[None, None, :, :]
@@ -164,7 +164,9 @@ cORM.dip.broadcasters(2, 4)
 cORM.sex.broadcasters(3, 4)
 
 
-thickv += cORM.dRi_dk_sex_term(cORM.bpm, cORM.cor, cORM.dip, cORM.sex, x_sex_ana, dx_sex_ana, dtheta_sex)
+AAGOAT = cORM.dRi_dk_sex_term(cORM.bpm, cORM.cor, cORM.dip, cORM.sex, x_sex_ana, dx_sex_ana, dtheta_sex)
+
+
 
 ##########################################################
 # Validation plot
@@ -174,11 +176,11 @@ thickv += cORM.dRi_dk_sex_term(cORM.bpm, cORM.cor, cORM.dip, cORM.sex, x_sex_ana
 
 thickv = np.transpose(thickv, (2,0,1))
 thickh = np.transpose(thickh, (2,0,1))
-
+AAGOAT = np.transpose(AAGOAT, (2,0,1))
 #La vertical sembla que està bastant aprop!
 plot_utils.plot_both_Zeus(num_dORM_dqV, num_dORM_dqH, thickv, thickh)
 
 
-
+a = num_dORM_dqV -thickv
 
 

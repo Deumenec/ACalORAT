@@ -3,7 +3,7 @@
 """
 Created on Fri Dec  5 19:29:25 2025
 
-@author: deumenec
+@author: Domènec Huerta
 Class with defined functions to compute ORMs and their derivatives
 """
 import numpy as np
@@ -29,10 +29,24 @@ def broadcast_vector(v, axis, ndim):
     ndim : number of dimensions of the target tensor
     """
     shape = [1] * ndim
-    shape[axis] = -1            # -1 lets reshape infer v's length
+    shape[axis] = -1
     return v.reshape(shape)
 
-
+def extract_kicks(dkicks, ind_old, ind_new):
+    """
+    takes a Jacobian of kicks in the second dimension in a given set of elements and extracts the
+    kicks in another set of elements by matching repeated elements, suposing the rest of kicks are zero!
+    """
+    dkicks = np.transpose(dkicks)
+    new_dkicks = np.zeros(np.shape(dkicks))
+    for i, eli in enumerate(ind_old):
+        for j , elj in enumerate(ind_new):
+            if elj > eli:
+                break
+            if elj == eli:
+                new_dkicks[j] = dkicks[i]
+                
+    return np.transpose(new_dkicks)
     
 class Elements:
     """Group of elements of a certain type: bpms, correctors, dipoles, 
@@ -649,6 +663,8 @@ class AnaORM:
 
     def dni_dqk_integral(self, Ei: Elements, Ek: Elements):
         """
+        GOOD NEW METHOD!!!
+        
         Integral formula deduced to calculate the derivative 
                         
         Based on thin response for dispersion from a quadrupole and integrating
@@ -656,6 +672,8 @@ class AnaORM:
         In bpm i due to quadrupole (or combined function dipole) 0
     
         This method is better when not applying fringe field corrections!
+        
+        
         """
         
         #TODO: check etrance correction into dipoles due to quadrupole fringe,
@@ -689,7 +707,7 @@ class AnaORM:
             disp_k*term_1 + ddisp_k*term_2 + source*term_3)
         
         return -np.real(dni_dqk)
-        
+    
     def dRij_dqk_thick23_disp_old(self, Ei : Elements, Ej : Elements, Ek : Elements, El : Elements):
         """
         Old formula for computing the derivative of dispersion using the definition
@@ -788,7 +806,7 @@ class AnaORM:
         
         
         return term1
-        
+    
     
     def dCFD_denergy(self, Ei: Elements, Ej: Elements, Ek: Elements):
         """
@@ -842,6 +860,38 @@ class AnaORM:
         term =     np.real(dEnergy[None, None,:] * dRij_dEnergy[: , :, None])
 
         return term
+    
+    def dRij_dbend_thick23_disp(self, Ei : Elements, Ej : Elements, Ek : Elements):
+        """
+        Computes the dRij_dbend dispersion term, which is relevant in the HORIZONTAL
+        transverse dimension when changing the dipole component of a CFD. It is scaled for
+        a proportional change to the quadrupole!
+        
+        Ei: BPMs,         1
+        Ej: correctors,   2
+        Ek: CFDs,         0
+        """
+        geometry = Ek.BendB / (Ek.KB)
+        
+        dni_dbend = Ek.LengthB * self.Rab_thick2_K(Ei, Ek) 
+        dnj_dbend = Ek.LengthB * self.Rab_thick2_K(Ej, Ek)  
+        
+        Ej2 = Elements(self.ring, self.all_optics, Ej._ind - 1, self.dir_ind, self.sgn)
+        Ej2.broadcasters(Ej._bAxis, Ej._ndim)
+        
+        dnj_dbend_prev = Ek.LengthB * self.Rab_thick2_K(Ej2, Ek)  
+        
+        ddnj_ds_dbend = (dnj_dbend - dnj_dbend_prev) / Ej2.LengthB
+        
+        if not hasattr(Ej, 'avDispersion'):
+            Ej.average()
+
+        ana_dORM_dbend_disp = (dni_dbend * Ej.avDispersionB + (dnj_dbend + ddnj_ds_dbend * Ej.LengthB / 2) * Ei.dispersionB ) / (self.mcf * self.circumference)
+        
+
+        
+        return np.real(ana_dORM_dbend_disp * geometry)
+        
         
     def dRij_dk_fringe(self, Ei:Elements, Ej:Elements, Ek:Elements):
         """
@@ -980,8 +1030,9 @@ class AnaORM:
         Calculates the term of the jacobian of the ORM considering the effective quadrupole created in sextupoles due to closed orbit distortion
         """
         #General cosinus terms
-        Cij1 = np.sum(self.Cabn(Ei, Ej, 1), axis = El._bAxis)
-        Sij1 = np.sum(self.Sabn(Ei, Ej, 1), axis = El._bAxis)
+        
+        Cij1 = self.Cabn(Ei, Ej, 1)
+        Sij1 = self.Sabn(Ei, Ej, 1)
 
         
         #Terms for thick sextupoles and mixing integrals
@@ -993,35 +1044,34 @@ class AnaORM:
         Ilkc2 = self.Ilkc2(El, i, j, k) 
         Ilks2 = self.Ilks2(El, i, j, k)
         
-        SSilk2 = np.sum(Ilkc2*Sil2 - Ilks2*Cil2, axis = El._bAxis)
-        CCilk2 = np.sum(Ilkc2*Cil2 + Ilks2*Sil2, axis = El._bAxis)
-        #Talk with Zeus if this term is necessary!
-        #DDilk2 = np.sum(Ilk0*np.heaviside(Ei.phiB-El.phiB), axis = El._bAxis)
+        SSilk2 = np.sum(Ilkc2*Sil2 - Ilks2*Cil2, axis = El._bAxis, keepdims=True)
+        CCilk2 = np.sum(Ilkc2*Cil2 + Ilks2*Sil2, axis = El._bAxis, keepdims=True)
+        DDilk2 = np.sum(Ilk0*np.heaviside(Ei.muB-El.muB, 0), axis = El._bAxis, keepdims=True)
+
+        SSjlk2 = np.sum(Ilkc2*Sjl2 - Ilks2*Cjl2, axis = El._bAxis, keepdims=True)
+        CCjlk2 = np.sum(Ilkc2*Cjl2 + Ilks2*Sjl2, axis = El._bAxis, keepdims=True)
+        DDjlk2 = np.sum(Ilk0*np.heaviside(Ej.muB-El.muB, 0), axis = El._bAxis, keepdims=True)
         
-        SSjlk2 = np.sum(Ilkc2*Sjl2 - Ilks2*Cjl2, axis = El._bAxis)
-        CCjlk2 = np.sum(Ilkc2*Cjl2 + Ilks2*Sjl2, axis = El._bAxis)
-        #IDEM
-        #DDjlk2 = np.sum(Ilk0*np.heaviside(Ej.phiB-El.phiB), axis = El._bAxis)
+        Iijk0 = np.sum(Ilk0, axis = El._bAxis, keepdims=True)
         
         #Terms for thick correctors without quadrupole moment inside of them
         Ijc1_L = self.Ikc1_(Ej)
         Ijs1_L = self.Iks1_(Ej)
     
-        #In the final sum, the broadcasting dimension for all sextupoles has already been contracted
-        Ilk0_term0 = np.sum(Ilk0*(2*np.heaviside(Ei.muB-Ek.muB, 0) -2*np.heaviside(Ej.muB-Ek.muB, 0)-np.sign(Ei.muB-Ej.muB)), axis = El._bAxis)
-        Ilk0_term0 = np.sum(Ilk0*(2*np.heaviside(Ei.muB-Ek.muB, 0) -2*np.heaviside(Ej.muB-Ek.muB, 0)-np.sign(Ei.muB-Ej.muB)), axis = El._bAxis)
         
-        dRij_terms =  (Cij1 * ( CCilk2 + CCjlk2 + 2*Ilk0 *np.cos(np.pi * self.tune)**2) + 
-                       Sij1 * ( SSilk2 - SSjlk2 + Ilk0_term0*np.sin(2*np.pi*self.tune))) 
-        dTij_terms = (Sij1 * (CCilk2 - CCjlk2 + 2*Ilk0 * np.cos(np.pi * self.tune)**2) + 
-                      Cij1 * (-SSjlk2 - SSilk2 + Ilk0 * np.sin(2*np.pi * self.tune) * (-2*np.heaviside(Ei.muB-Ek.muB, 0) 
-                           + 2*np.heaviside(Ej.muB-Ek.muB, 0) + np.sign(Ei.muB-Ej.muB))))
+        dRij_terms =  (Cij1 * ( CCilk2 + CCjlk2 + 2*Iijk0 *np.cos(np.pi * self.tune)**2) + 
+                       Sij1 * ( SSilk2 - SSjlk2 
+                     + np.sin(2*np.pi*self.tune)*(2*DDilk2 - 2*DDjlk2 - Iijk0*np.sign(Ei.muB-Ej.muB)))) 
+        dTij_terms = (Sij1 * (CCilk2 - CCjlk2 + 2*Iijk0 * np.cos(np.pi * self.tune)**2) + 
+                      Cij1 * (-SSjlk2 - SSilk2 
+                     + np.sin(2*np.pi*self.tune)*(-2*DDilk2 + 2*DDjlk2 + Iijk0*np.sign(Ei.muB-Ej.muB)))) 
+
         
         ana_dORM_dq = self.sgn * ( np.sqrt(Ei.betaB * Ej.betaB) 
          / (8 * np.sin(np.pi * self.tune)* np.sin(2 * np.pi * self.tune)) 
          * (Ijc1_L * dRij_terms + Ijs1_L * dTij_terms))
         
-        return np.real(ana_dORM_dq) #Per assegurar que retorni un real bé
+        return np.squeeze( np.real(ana_dORM_dq) ) #Per assegurar que retorni un real bé
     
     
     def aMCF(self, Em: Elements,En: Elements):

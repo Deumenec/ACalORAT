@@ -6,7 +6,7 @@ Created on Mon Feb  2 10:30:11 2026
 
 Test to check if orbit displacement in BPMs is proportional to dispersion
 Also built to check numerically if the derivative of dispersion is well 
-calculated at least in the x transverse dimension!
+calculated at least in the x transverse dimension! Without Correctors
 """
 
 import os
@@ -126,12 +126,13 @@ def disp_i_dk(disp_i, ring, quad, step):
 
 di_dk = np.zeros((len(ind["dip"]),len(ind["bpm"]))) 
 
+
 if False:
     for i in range(len(ind["dip"])):
         di_dk[i] = disp_i_dk(dispReal, ring, ind["dip"][i], step)
-    np.save("di_dk",di_dk )
+    np.save(SAVE / "di_dk",di_dk )
     
-di_dk = np.load("di_dk.npy")
+di_dk = np.load(SAVE / "di_dk.npy")
 
 
 #CODE TO SPLIT ELEMENTS TO TEST THE ANALYTICAL FORMUMA!
@@ -259,9 +260,8 @@ cORM2 =  AnaORM.AnaORM(ring,"h" ,ind)
 cORM2.assign_optics()
 cORM2.CFD.correct_entrance()
 cORM2.bpm.broadcasters(1, 2)
+cORM2.cor.broadcasters(1, 2)
 cORM2.CFD.broadcasters(0, 2)
-di_dk_anacool = cORM2.dni_dqk_integral(cORM2.bpm, cORM2.CFD)
 
-aa = di_dk_anacool/di_dk
-a_error = (di_dk_anacool- di_dk)/di_dk*100
-a_com = math_utils.tensorComparison(di_dk, di_dk_anacool, (0,1))
+dii_dk_anacool = cORM2.dni_dqk_integral(cORM2.bpm, cORM2.CFD)
+dij_dk = cORM2.dni_dqk_integral(cORM2.cor, cORM2.CFD)

@@ -567,6 +567,7 @@ def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
 
         new_orbit = at.find_orbit(local_ring, refpts=range(len(local_ring)))[1]
         x_sex = np.array([i[0] for i in new_orbit])[ind["sex"]]
+        x_sexp= np.array([i[1] for i in new_orbit])[ind["sex"]]
         energy = np.average(new_orbit[:,4])
         
         disp = at.get_optics(local_ring, refpts=range(len(ring)))[2]["dispersion"]
@@ -580,6 +581,7 @@ def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
             "kicks_h": t_kicks["h"],
             "kicks_v": t_kicks["v"],
             "sex": x_sex,
+            "sexp": x_sexp,
             "denergy" : energy
         }
     
@@ -598,7 +600,8 @@ def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
         "dFreq":    (state_plus["freq"] - state_minus["freq"]) / denominator,
         "dKicks_h": (state_plus["kicks_h"] - state_minus["kicks_h"]) / denominator,
         "dKicks_v": (state_plus["kicks_v"] - state_minus["kicks_v"]) / denominator,
-        "dsex":     (state_plus["sex"] - state_minus["sex"]) / denominator,
+        "dsex":     {"0": (state_plus["sex"] - state_minus["sex"]) / denominator, 
+                     "1": (state_plus["sexp"] - state_minus["sexp"]) / denominator},
         "denergy": (state_plus["denergy"] - state_minus["denergy"]) / denominator
     }
 

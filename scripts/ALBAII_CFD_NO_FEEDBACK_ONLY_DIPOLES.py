@@ -113,16 +113,18 @@ dRij_dEnergy = numerical.quickdORMdEnergy(ring, ind)
 
 cORM = AnaORM.AnaORM(ring,"h", ind)
 cORM.assign_optics()
+cORM.CFD.correct_entrance()
 cORM.bpm.broadcasters(0, 3)
 cORM.cor.broadcasters(1, 3)
 cORM.CFD.broadcasters(2, 3)
 
-denergy = cORM.ddip_denergy(cORM.dip)
+denergy = np.real(cORM.ddip_denergy(cORM.dip))
 
 
 thickh = (cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["h"], dEnergyH)) 
 
 
+a_bend = cORM.dRij_dbend_thick23_disp(cORM.bpm, cORM.cor, cORM.CFD)
 
 
 
@@ -135,7 +137,7 @@ cORM.dip.broadcasters(2, 3)
 thickv = (0*cORM.dRij_dk_fringe(cORM.bpm, cORM.cor, cORM.dip)
     +cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["v"], dEnergyV)) 
 
-aa = cORM.dRij_dk_fringe(cORM.bpm, cORM.cor, cORM.dip)
+
 
 ##########################################################
 # Comparisons
@@ -144,15 +146,13 @@ aa = cORM.dRij_dk_fringe(cORM.bpm, cORM.cor, cORM.dip)
 thickv = np.transpose(thickv, (2,0,1))
 thickh = np.transpose(thickh, (2,0,1))
 
-thickv = np.transpose(thickv, (2,0,1))
-thickh = np.transpose(thickh, (2,0,1))
-dORMV  = np.transpose(dORMV, (2,0,1))
-dORMH  = np.transpose(dORMH, (2,0,1))
+a_bend = np.transpose(a_bend, (2,0,1))  
 
+aa = thickh-dORMH
 
 plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
 
-
+aaa = a_bend/aa*1000
 
 
 

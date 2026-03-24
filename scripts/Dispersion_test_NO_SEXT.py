@@ -265,3 +265,6 @@ cORM2.CFD.broadcasters(0, 2)
 
 dii_dk_anacool = cORM2.dni_dqk_integral(cORM2.bpm, cORM2.CFD)
 dij_dk = cORM2.dni_dqk_integral(cORM2.cor, cORM2.CFD)
+
+
+

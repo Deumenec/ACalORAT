@@ -108,9 +108,9 @@ cORM = AnaORM.AnaORM(ring,"v", ind)
 cORM.assign_optics()
 cORM.bpm.broadcasters(1, 3)
 cORM.cor.broadcasters(2, 3)
-cORM.dip.broadcasters(0, 3)
+cORM.CFD.broadcasters(0, 3)
 
-thickv = cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip)
+thickv = cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.CFD)
 
 
 ###### Example calculating the dORM_dq with thin and thick elements!
@@ -129,7 +129,7 @@ thickh = cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.CFD) + cORM.dRij_
 
 ##########################################################
 
-plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
+plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh, SAVE = SAVE)
 
 
 

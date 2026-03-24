@@ -4,37 +4,27 @@
 Created on Fri Dec  5 19:29:25 2025
 
 @author: Domènec Huerta
+
 Class with defined functions to compute ORMs and their derivatives
 """
 import numpy as np
 import at
 import copy
-
 from . import numerical
+from .Elements import Elements
 
-dir_dict = {"h": 0, "v": 1}
+from .physics.ORM import ORM
+from .physics.dORM_dquad    import dORM_dquad
+from .physics.DispersionQuad import DispersionQuad
 
-def get_mcf(ring):
-    if (ring.is_6d==True):
-        ring.disable_6d()
-        mcf = ring.mcf
-        ring.enable_6d()
-        return mcf
-    return ring.mcf
 
-def broadcast_vector(v, axis, ndim):
-    """
-    v    : 1D vector to broadcast
-    axis : axis along which v should vary
-    ndim : number of dimensions of the target tensor
-    """
-    shape = [1] * ndim
-    shape[axis] = -1
-    return v.reshape(shape)
+#dir_dict = {"h": 0, "v": 1} #For further reference, see the structure of the at.get_optics output
 
 def extract_kicks(dkicks, ind_old, ind_new):
     """
-    takes a Jacobian of kicks in the second dimension in a given set of elements and extracts the
+    Used to get the kicks inside of sexupole correctors.
+    
+    Takes a Jacobian of kicks in the second dimension in a given set of elements and extracts the
     kicks in another set of elements by matching repeated elements, suposing the rest of kicks are zero!
     """
     dkicks = np.transpose(dkicks)
@@ -47,140 +37,66 @@ def extract_kicks(dkicks, ind_old, ind_new):
                 new_dkicks[j] = dkicks[i]
                 
     return np.transpose(new_dkicks)
-    
-class Elements:
-    """Group of elements of a certain type: bpms, correctors, dipoles, 
-    quadrupoles or sextupoles containing all the important atributes from them with 
-    their optics. By default all optics are before entrance. at the element
-    """
-    def __init__(self, ring, all_optics ,ind, dir_ind, sgn):
-        """
-        all_optics
-        ind : np.array 
-        list of only a certain class of elements elements, assigns the optics for each calculation
-        """
-        if len(ind) == 0: return
-        self._ring= ring
-        self._ind = ind
-        self._sgn  = sgn
-        self.beta = np.array([all_optics[2]["beta"][i][dir_ind] for i in ind], dtype= complex)
-        self.alpha= np.array([all_optics[2]["alpha"][i][dir_ind] for i in ind], dtype= complex)
-        self.gamma= (self.alpha*self.alpha+1)/self.beta
-        self.mu   = np.array([all_optics[2]["mu"][i][dir_ind] for i in ind])
-        self.dispersion = np.array([all_optics[2]["dispersion"][i][2*dir_ind] for i in ind], dtype= complex)
-        self.dispersionp = np.array([all_optics[2]["dispersion"][i][2*dir_ind+1] for i in ind], dtype= complex)
-        if hasattr(ring[ind[0]], "BendingAngle"):self.Bend = np.array([ring[i].BendingAngle for i in ind])
-        if hasattr(ring[ind[0]], "Length"):      self.Length = np.array([ring[i].Length for i in ind])
-        if (hasattr(ring[ind[0]], "PolynomB" ) and len(ring[ind[0]].PolynomB) >=2):  self.K = np.array([-sgn*ring[i].PolynomB[1] for i in ind], dtype= complex)
-        if (hasattr(ring[ind[0]], "PolynomB" ) and len(ring[ind[0]].PolynomB) >=3):  self.S = np.array([-sgn*ring[i].PolynomB[2] for i in ind], dtype= complex)
-        if hasattr(ring[ind[0]], "EntranceAngle"): self.EntranceAngle = np.array([ring[i].EntranceAngle for i in ind], dtype= complex)   
-        if hasattr(ring[ind[0]], "ExitAngle"): self.ExitAngle = np.array([ring[i].ExitAngle for i in ind], dtype= complex)   
-    
-    def correct_entrance(self):
-        """ To be called for dipoles to correct the optic functions inside of
-        them after entrance angles. And adjust force.
-        """
-        #TODO: Think a while about the strength corrections!
-        #Entrance angle correction to betas
-        if hasattr(self, "EntranceAngle"):
-            self.alpha += self._sgn *self.beta*np.tan(self.EntranceAngle)*(self.Bend/self.Length)
-            
-            #RECALCULEM LA GAMMA AMB LA NOVA ÒPTICA
-            self.gamma = (1 + self.alpha**2) / self.beta
-            
-            if self._sgn ==-1: #We are in the horizontal direction
-                self.dispersionp += np.tan(self.EntranceAngle)*(self.Bend/self.Length)*self.dispersion
-                
 
-        #STRENGTH CORRECTION ONLY FOR HORIZONTAL ONES!
-        if self._sgn == -1 and hasattr(self, "Bend"):
-            if not hasattr(self, "K"):
-                self.K =0
-            self.K +=  (self.Bend/self.Length)*(self.Bend/self.Length)
-        
-    def correct_strength(self):
-        """ Calculates the closed orbit off-momentum and uses it to correct the actual effective
-        strength of the quadrupoles... It can be applied before broadcasting but it is a really mince correction... 0.1%
-        
-        In principle also this momentum deviation is already in the same units as beam rigidity
-        
-        #TODO: this is ABS the last term that should be added
-        """
-        co = at.find_orbit6(self._ring, self._ind)[1] 
-        deviations = np.array([i[4] for i in co]) #The momentum deviation is in the 4rth component
-        self.K = self.K/(1+deviations)
-        
-    def average(self):
-        """Computes the average of the dispersion inside elements by applying entrance angle and propagating inside, it may be useful for
-        some elements to be considered thin
-        """
-        #We start by considering the effect of the entrance fringe field:
-        dispersionp = self.dispersionp
-        if hasattr(self, "EntranceAngle"):
-            dispersionp +=  -self.dispersion*np.tan(self.EntranceAngle)*(self.Bend/self.Length)
-        if hasattr(self, "Bend"):
-            k_total = self.K+(self.Bend/self.Length)**2 #Effective K value
-            phi = np.sqrt(k_total)*self.Length
-            self.avDispersion = self.dispersion *np.sin(phi)/phi + dispersionp/(k_total*self.Length)*(1-np.cos(phi))+self.Bend/(self.Length*k_total)*(1-np.sin(phi)/phi)
-        if (not hasattr(self, "Bend")) and hasattr(self, "K"):
-            k_total = self.K
-            phi = np.sqrt(k_total)*self.Length
-            self.avDispersion = self.dispersion + self.dispersionp*self.Length/2
-        if (not hasattr(self, "Bend")) and not hasattr(self, "K"):
-            self.avDispersion = self.dispersion + self.dispersionp*self.Length/2
-        if hasattr(self, "_bAxis"):
-            setattr(self, "avDispersion"+"B", broadcast_vector( self.avDispersion ,self._bAxis, self._ndim))
-    def broadcasters(self, axis, ndim):
-        """
-        Prepares variables in Element for broadcasting with numpy functions placing them
-        in a np.array with the required dimensions and in the required broadcasting
-        dimension.
-        
-        Example: bpm.broadcasters(2, 3) -> muB = mu[None, None, :]
-        
-        With B indicating a broadcasting variable.
-        """
-        self._bAxis = axis #Saving the broadcasting axis
-        self._ndim  = ndim
-        variables = [attr for attr in self.__dict__ if not attr.startswith('_')] #Crea broadcasters per totes les variables igual
-        for var in variables:
-            setattr(self, var+"B", broadcast_vector( getattr(self, var) , axis, ndim))
-
-class AnaORM:
+  
+class AnaORM(ORM, dORM_dquad, DispersionQuad):
     """Analitic Calculation of Orbit by AT
-    Methods used for different calculations involving 
-
+    Method used for all calculations on analytical calculation
+    
+    For each element type, it contains an instance of the Elements Class with
+    all relevant information.
+    #TODO: this is the most important class so explain well!
     Parameters
     ----------
     ring : at.lattice.lattice_object.Lattice
+    
         lattice used
+        
     direction : np.array
+    
         "v" or "h", direction in which the calculations are performed
-    ind      : dict
-        Beam Position Monitors for the orbit response matrix
-    ind_cor : np.array
-        Correctors used for the ORM
-    ind_quad : np.array
-        Quadrupoles to take the derivatives
-    ind_dip : np.array
-        Indices for the dipoles in the matrix for dispersion calculations
+        
+    ind    : dict
+    
+        Indices for groups of elements in the ring, it is required to have:
+            bpm, cor["v"], cor["h"], quad, dip and optionally sex and CFD 
     """
+    
     def __init__(self, ring :at.lattice.lattice_object.Lattice, 
                  direction: str, 
                  ind: dict,
                  old_optics = False):
+        """
+        
+
+        Parameters
+        ----------
+        ring : at.lattice.lattice_object.Lattice
+            DESCRIPTION.
+        direction : str
+            DESCRIPTION.
+        ind : dict
+            DESCRIPTION.
+        old_optics : TYPE, optional
+            DESCRIPTION. The default is False.
+
+        """
         self.ring     = ring
-        self.mcf = get_mcf(ring)
+        """pepsicolor"""
+        self.mcf = numerical.get_mcf(ring)
         self.circumference = ring.circumference
         self.ind  = ind
         self.dir  = direction
-        self.dir_ind = dir_dict[direction] #Index of the direction in at.get_optics in which the derivative is calculated
+        self.dir_ind = {"h": 0, "v": 1}[direction] #Index of the direction in at.get_optics in which the derivative is calculated
         if old_optics is False: self.all_optics = at.get_optics(ring, refpts=range(len(ring))) # get all the optics from the ring
         else: self.all_optics = old_optics
         self.tune = self.all_optics[1]["tune"][self.dir_ind]
         self.sgn  = -(-1)**self.dir_ind #sign associated with that direction for quadrupoles
 
-    def assign_optics(self): #Asigna l'òptica dels elements que hi ha en general a l'anell, però sempre es pot fer a mà
+    def assign_optics(self): 
+        """
+        Assigns the optics for all the elements in the ring.
+        """
         self.bpm = Elements(self.ring, self.all_optics ,self.ind["bpm"], self.dir_ind, self.sgn)    
         self.cor = Elements(self.ring, self.all_optics ,self.ind["cor"][self.dir], self.dir_ind, self.sgn)
         self.quad= Elements(self.ring, self.all_optics ,self.ind["quad"], self.dir_ind,self.sgn)
@@ -191,587 +107,15 @@ class AnaORM:
         #Important; this new element can be for a calculation set in a different direction. This will change the optics functions that
         #Are stored with it and the sign of its calculations, aleshores s'utilitzen aquestes direccions
         """ADDS a new element to the calculation method to perform different calculations"""
-        setattr(self,name,Elements(self.ring, self.all_optics ,ind, dir_dict[direction], -(-1)**(dir_dict[direction])))
+        setattr(self,name,Elements(self.ring, self.all_optics ,ind, {"h": 0, "v": 1}[direction], -(-1)**({"h": 0, "v": 1}[direction])))
+    
+    
+
+    """
     #########################################################################
-    # To use the functions here, broadcastig has to be defined on elements
-    # By typing Element.broadcasters(axis, dim)
+    ### Miscelaneous Closed Orbit Formulas
     #########################################################################
-    
-    def Cabn(self, Ea: Elements, Eb: Elements, n: int):
-        return np.cos(n*np.abs(Ea.muB-Eb.muB)-n*np.pi*self.tune)
-
-    def Sabn(self, Ea: Elements, Eb: Elements, n: int):
-        """IMPORTANT, cal sumar una quantitat molt petita a la funció signe perqué
-        comporti de la manera definida a l'informe!
-        """
-        return np.sign(Ea.muB-Eb.muB-0.0000001)*np.sin(n*np.abs(Ea.muB-Eb.muB)-n*np.pi*self.tune)
-    
-    def Rab_thin(self, Ea : Elements, Eb: Elements):
-        return np.sqrt(Ea.betaB*Eb.betaB)/(2*np.sin(np.pi*self.tune))*self.Cabn(Ea, Eb, 1)
-    
-    def Tab_thin(self, Ea : Elements, Eb: Elements):
-        return np.sqrt(Ea.betaB*Eb.betaB)/(2*np.sin(np.pi*self.tune))*self.Sabn(Ea, Eb, 1)
-    
-    def Rab_thick2_(self, Ea : Elements, Eb: Elements):
-        """ Returns the ORM with thick correctors WITHOUT quadrupolar moment inside
-        """
-        Cij1 = self.Cabn(Ea, Eb, 1)
-        Sij1 = self.Sabn(Ea, Eb, 1)
-        
-        Ijc = self.Ikc1_(Eb)
-        Ijs = self.Iks1_(Eb)
-        
-        return np.real(np.sqrt(Ea.betaB*Eb.betaB)/(2*np.sin(np.pi*self.tune))*(Ijc*Cij1+Ijs*Sij1))
-    
-    def Rab_thick2_K(self, Ea : Elements, Eb: Elements):
-        """ Returns the ORM with thick correctors WITH quadrupolar moment inside
-        """
-        Cij1 = self.Cabn(Ea, Eb, 1)
-        Sij1 = self.Sabn(Ea, Eb, 1)
-        
-        Ijc = self.Ikc1(Eb)
-        Ijs = self.Iks1(Eb)
-        
-        return np.real(np.sqrt(Ea.betaB*Eb.betaB)/(2*np.sin(np.pi*self.tune))*(Ijc*Cij1+Ijs*Sij1))
-    
-    def Rab_thick2_disp(self, Ea : Elements, Eb: Elements):
-        """ Returns the dispersion term of the ORM with thick correctors WITHOUT quadrupolar moment inside and no dipole component
-        """
-        return np.real(-Ea.dispersionB*(Eb.dispersionB+1/2*Eb.dispersionpB*Eb.LengthB))/(self.mcf*self.circumference)
-    
-    def Rab_thick2_disp_K(self, Ea : Elements, Eb: Elements):
-        """ Returns the dispersion term of the ORM with thick correctors WITH quadrupolar moment inside and no dipole component
-        Basically it takes the average...
-        """
-        if not hasattr(Eb, 'avDispersion'):
-            Eb.average()
-        return np.real(-Ea.dispersionB*(Eb.avDispersionB))/(self.mcf*self.circumference)
-    def Ik0(self, Ek: Elements):
-        """Integral for element WITH quadrupolar moment """
-        return (Ek.betaB+Ek.gammaB/Ek.KB)*Ek.LengthB/2+ (Ek.betaB-Ek.gammaB/Ek.KB)*(np.sin(2*np.sqrt(Ek.KB)*Ek.LengthB))/(4*np.sqrt(Ek.KB))+Ek.alphaB/(2*Ek.KB)*(np.cos(2*np.sqrt(Ek.KB)*Ek.LengthB)-1)
-
-    def Ikc1_(self, Ek: Elements):
-        """Integral for element WITHOUT quadrupolar moment """
-        return 1 -Ek.alphaB*Ek.LengthB/(2*Ek.betaB)
-        
-    def Iks1_(self, Ek: Elements):
-        """Integral for element WITHOUT quadrupolar moment """
-        return Ek.LengthB/(2*Ek.betaB)
-
-
-    def Ikc1(self, Ek: Elements):
-        """Integral for element WITH quadrupolar moment (the definition with a hat) """
-        return ((np.sqrt(Ek.betaB/Ek.KB)*np.sin(Ek.LengthB*np.sqrt(Ek.KB))+(Ek.alphaB*(np.cos(Ek.LengthB*np.sqrt(Ek.KB))-1))/(Ek.KB*np.sqrt(Ek.betaB))))/(Ek.LengthB*np.sqrt(Ek.betaB))
-        
-    def Iks1(self, Ek: Elements):
-        """Integral for element WITH quadrupolar moment (the definition with a hat)"""
-        return -(np.cos(Ek.LengthB*np.sqrt(Ek.KB))-1)/(Ek.KB*np.sqrt(Ek.betaB)*Ek.LengthB*np.sqrt(Ek.betaB))  
-    
-    def Iks2(self, Ek: Elements): 
-        """Integral term with quadrupole moment inside"""
-        return 1/(2*Ek.KB)*(1-np.cos(2*np.sqrt(Ek.KB)*Ek.LengthB)+Ek.alphaB/(Ek.betaB)*(np.sin(2*np.sqrt(Ek.KB)*Ek.LengthB)/np.sqrt(Ek.KB)-2*Ek.LengthB))
-        
-    def Ikc2(self, Ek: Elements):
-        """Integral term with quadrupole moment inside"""
-        return self.Ik0(Ek) + (np.sin(2*np.sqrt(Ek.KB)*Ek.LengthB)/(2*np.sqrt(Ek.KB))-Ek.LengthB)/(Ek.KB*Ek.betaB)
-    
-    
-    def Ijc1_L(self, Ej: Elements):
-        """Integral term for elements WITH quadrupole moment inside divided by the length of the element"""
-        return np.real(np.sin(np.sqrt(Ej.KB)*Ej.LengthB)/(Ej.LengthB*np.sqrt(Ej.KB)) + Ej.alphaB*(np.cos(np.sqrt(Ej.KB)*Ej.LengthB)-1)/(Ej.KB*Ej.betaB*Ej.LengthB))
-        
-    def Ijs1_L(self, Ej: Elements):
-        """Integral term for elements WITH quadrupole moment inside divided by the length of the elmeent"""
-        return -(np.cos(np.sqrt(Ej.KB)*Ej.LengthB)-1)/(Ej.KB*Ej.betaB*Ej.LengthB)
-    
-    #MORE INTEGRAL TERMS FOR SEXTUPOLES!
-    
-    def Ilk0(self, El: Elements, i, j, k):
-        """Integral of the derivative of displacement in its broadcasting dimensions
-        
-        Derivative of paramaeters governing the closed orbit inside of the sextupole
-        with already the correct broadcasting dimensions
-        i = dx_l/dqk
-        j = dx_l'/dqk
-        k = dtheta_l/dqk
-        
-        OBSERVATION: COLLECTING with respect to a, b, c would reduce the total number of operations!
-        """
-        
-        a = El.alphaB
-        b = El.betaB
-        c = El.gammaB
-        L = El.LengthB
-        s = El.SB
-        
-        return s*(1/20*(5*c*j + 2*c*k)*L**4 + 1/12*(4*c*i - 8*a*j - 3*a*k)*L**3 - 1/6*(6*a*i - 3*b*j - b*k)*L**2 + L*b*i)
-     
-    def Ilkc2(self, El: Elements, i, j, k):
-        """Integral of the derivative of displacement in its broadcasting dimensions
-        
-        Derivative of paramaeters governing the closed orbit inside of the sextupole
-        with already the correct broadcasting dimensions
-        i = dx_l/dqk
-        j = dx_l'/dqk
-        k = dtheta_l/dqk
-        
-        OBSERVATION: COLLECTING with respect to a, b, c would reduce the total number of operations!
-        """
-        
-        a = El.alphaB
-        b = El.betaB
-        c = El.gammaB
-        L = El.LengthB
-        s = El.SB
-        
-        return s*(1/20*(5*c*j + 2*c*k - 10*j/b - 4*k/b)*L**4 + 1/12*(4*c*i - 8*a*j - 3*a*k - 8*i/b)*L**3 - 1/6*(6*a*i - 3*b*j - b*k)*L**2 + L*b*i)
-        
-    def Ilks2(self, El: Elements, i, j, k):
-        """Integral of the derivative of displacement in its broadcasting dimensions
-        
-        
-        Derivative of paramaeters governing the closed orbit inside of the sextupole
-        with already the correct broadcasting dimensions
-        i = dx_l/dqk
-        j = dx_l'/dqk
-        k = dtheta_l/dqk
-        
-
-        OBSERVATION: COLLECTING with respect to a, b, c would reduce the total number of operations!
-        """
-        
-        a = El.alphaB
-        b = El.betaB
-        c = El.gammaB
-        L = El.LengthB
-        s = El.SB
-        
-        return s*(-1/5*L**4*(5*a*j/b + 2*a*k/b) - 1/6*L**3*(8*a*i/b - 8*j - 3*k) + 2*L**2*i)
-        
-    
-    
-    def dRij_dqk_thin(self, Ei : Elements, Ej : Elements, Ek : Elements):
-        """Considers all elements as thin, results can be greatlly improved by passing average
-        optics computed with the average method instead of the entrance optics, but for thick
-        elements one has to use the thick version of the formula.
-        """
-        Cij1 = self.Cabn(Ei, Ej, 1)
-        Cik2 = self.Cabn(Ei, Ek, 2)
-        Cjk2 = self.Cabn(Ej, Ek, 2)
-        Sij1 = self.Sabn(Ei, Ej, 1)
-        Sik2 = self.Sabn(Ei, Ek, 2)
-        Sjk2 = self.Sabn(Ej, Ek, 2)
-            
-        cosTerm = Cij1 * ( Cik2 + Cjk2 + 2* np.cos(np.pi * self.tune)**2)
-        sinTerm = Sij1 * ( Sik2 - Sjk2 + np.sin( 2*np.pi*self.tune)*(2*np.heaviside(Ei.muB-Ek.muB, 0)
-                    -2*np.heaviside(Ej.muB-Ek.muB, 0)-np.sign(Ei.muB-Ej.muB)))
-        
-        ana_dORM_dq = self.sgn * (
-        np.sqrt(Ei.betaB * Ej.betaB) * Ek.betaB * Ek.LengthB
-        / (8 * np.sin(np.pi * self.tune)* np.sin(2 * np.pi * self.tune)) 
-        * (cosTerm + sinTerm))
-        return np.real(ana_dORM_dq)
-
-    def dRij_dqk_thick2(self, Ei : Elements, Ej : Elements, Ek : Elements):
-        """
-        Computes the Jacobian of the ORM with respect to changing thin quadrupoles but thick correctors.
-        """
-        Cij1 = self.Cabn(Ei, Ej, 1)
-        Cik2 = self.Cabn(Ei, Ek, 2)
-        Cjk2 = self.Cabn(Ej, Ek, 2)
-        Sij1 = self.Sabn(Ei, Ej, 1)
-        Sik2 = self.Sabn(Ei, Ek, 2)
-        Sjk2 = self.Sabn(Ej, Ek, 2)
-        
-        #Terms for thick correctors without quadrupole moment inside of them
-        Ijc1_L = self.Ikc1_(Ej)
-        Ijs1_L = self.Iks1_(Ej)
-        
-        dRij_terms =  (Cij1 * ( Cik2 + Cjk2 + 2*np.cos(np.pi * self.tune)**2) + 
-                       Sij1 * ( Sik2 - Sjk2 + np.sin(2*np.pi*self.tune)*(2*np.heaviside(Ei.muB-Ek.muB, 0)
-                           -2*np.heaviside(Ej.muB-Ek.muB, 0)-np.sign(Ei.muB-Ej.muB)))) 
-        dTij_terms =  (Sij1 * (Cik2 - Cjk2 +  2* np.cos(np.pi * self.tune)**2) + 
-                       Cij1 * (-Sjk2 - Sik2 + np.sin(2*np.pi * self.tune) * (-2*np.heaviside(Ei.muB-Ek.muB, 0) 
-                           + 2*np.heaviside(Ej.muB-Ek.muB, 0) + np.sign(Ei.muB-Ej.muB))))
-        
-        ana_dORM_dq = self.sgn * (Ek.betaB * np.sqrt(Ei.betaB * Ej.betaB) 
-         / (8 * np.sin(np.pi * self.tune)* np.sin(2 * np.pi * self.tune)) 
-         * (Ijc1_L * dRij_terms + Ijs1_L * dTij_terms))
-        
-        
-        return np.real(ana_dORM_dq) #Per assegurar que retorni un real bé
-    
-    def dRij_dqk_thick3(self, Ei : Elements, Ej : Elements, Ek : Elements):
-        """Computes the dRij_dqk asssuming only thick quadrupoles"""
-        Cij1 = self.Cabn(Ei, Ej, 1)
-        Cik2 = self.Cabn(Ei, Ek, 2)
-        Cjk2 = self.Cabn(Ej, Ek, 2)
-        Sij1 = self.Sabn(Ei, Ej, 1)
-        Sik2 = self.Sabn(Ei, Ek, 2)
-        Sjk2 = self.Sabn(Ej, Ek, 2)
-        
-        #Terms for the thick element formula        
-        Ik0  = self.Ik0(Ek)
-        Iks2 = self.Iks2(Ek)
-        Ikc2 = self.Ikc2(Ek)
-        SSik2= Ikc2*Sik2-Iks2*Cik2
-        SSjk2= Ikc2*Sjk2-Iks2*Cjk2
-        CCik2= Ikc2*Cik2+Iks2*Sik2
-        CCjk2= Ikc2*Cjk2+Iks2*Sjk2
-        
-        cosTerm = Cij1 * ( CCik2 + CCjk2 + 2*Ik0 *np.cos(np.pi * self.tune)**2)
-        sinTerm = Sij1 * ( SSik2 - SSjk2 + Ik0*np.sin(2*np.pi*self.tune)*(2*np.heaviside(Ei.muB-Ek.muB, 0)
-            -2*np.heaviside(Ej.muB-Ek.muB, 0)-np.sign(Ei.muB-Ej.muB)))
-        ana_dORM_dq = self.sgn * ( np.sqrt(Ei.betaB * Ej.betaB) 
-         / (8 * np.sin(np.pi * self.tune)* np.sin(2 * np.pi * self.tune)) 
-         * (cosTerm + sinTerm))
-        return np.real(ana_dORM_dq) #Per assegurar que retorni un real bé
-    
-
-    
-    def dRij_dqk_thick23(self, Ei : Elements, Ej : Elements, Ek : Elements):
-        """Computes the dRij_dqk asssuming thick correctors without quadrupolar component and thick quadrupoles"""
-
-        Cij1 = self.Cabn(Ei, Ej, 1)
-        Cik2 = self.Cabn(Ei, Ek, 2)
-        Cjk2 = self.Cabn(Ej, Ek, 2)
-        Sij1 = self.Sabn(Ei, Ej, 1)
-        Sik2 = self.Sabn(Ei, Ek, 2)
-        Sjk2 = self.Sabn(Ej, Ek, 2)
-        
-        #Terms for the thick quadrupole formula      
-        
-        Ik0  = self.Ik0(Ek)
-        Iks2 = self.Iks2(Ek)
-        Ikc2 = self.Ikc2(Ek)
-        SSik2= Ikc2*Sik2-Iks2*Cik2
-        SSjk2= Ikc2*Sjk2-Iks2*Cjk2
-        CCik2= Ikc2*Cik2+Iks2*Sik2
-        CCjk2= Ikc2*Cjk2+Iks2*Sjk2
-
-        #Terms for thick correctors without quadrupole moment inside of them
-        Ijc1_L = self.Ikc1_(Ej)
-        Ijs1_L = self.Iks1_(Ej)
-        
-        dRij_terms =  (Cij1 * ( CCik2 + CCjk2 + 2*Ik0 *np.cos(np.pi * self.tune)**2) + 
-                       Sij1 * ( SSik2 - SSjk2 + Ik0*np.sin(2*np.pi*self.tune)*(2*np.heaviside(Ei.muB-Ek.muB, 0)
-                           -2*np.heaviside(Ej.muB-Ek.muB, 0)-np.sign(Ei.muB-Ej.muB)))) 
-        dTij_terms = (Sij1 * (CCik2 - CCjk2 + 2*Ik0 * np.cos(np.pi * self.tune)**2) + 
-                      Cij1 * (-SSjk2 - SSik2 + Ik0 * np.sin(2*np.pi * self.tune) * (-2*np.heaviside(Ei.muB-Ek.muB, 0) 
-                           + 2*np.heaviside(Ej.muB-Ek.muB, 0) + np.sign(Ei.muB-Ej.muB))))
-        ana_dORM_dq = self.sgn * ( np.sqrt(Ei.betaB * Ej.betaB) 
-         / (8 * np.sin(np.pi * self.tune)* np.sin(2 * np.pi * self.tune)) 
-         * (Ijc1_L * dRij_terms + Ijs1_L * dTij_terms))
-        
-        return np.real(ana_dORM_dq) #Per assegurar que retorni un real bé
-    
-    def dRij_dqk_thick23_master(self, Ei : Elements, Ej : Elements, Ek : Elements):
-        """Computes the dRij_dqk asssuming thick correctors without quadrupolar component and thick quadrupoles and applyes fringe correctio"""
-
-        Ek = copy.deepcopy(Ek)
-        Ek.correct_entrance()
-        Ek.broadcasters(Ek._bAxis, Ek._ndim)
-        Cij1 = self.Cabn(Ei, Ej, 1)
-        Cik2 = self.Cabn(Ei, Ek, 2)
-        Cjk2 = self.Cabn(Ej, Ek, 2)
-        Sij1 = self.Sabn(Ei, Ej, 1)
-        Sik2 = self.Sabn(Ei, Ek, 2)
-        Sjk2 = self.Sabn(Ej, Ek, 2)
-        
-        #Terms for the thick quadrupole formula      
-        
-        Ik0  = self.Ik0(Ek)
-        Iks2 = self.Iks2(Ek)
-        Ikc2 = self.Ikc2(Ek)
-        SSik2= Ikc2*Sik2-Iks2*Cik2
-        SSjk2= Ikc2*Sjk2-Iks2*Cjk2
-        CCik2= Ikc2*Cik2+Iks2*Sik2
-        CCjk2= Ikc2*Cjk2+Iks2*Sjk2
-
-        #Terms for thick correctors without quadrupole moment inside of them
-        Ijc1_L = self.Ikc1_(Ej)
-        Ijs1_L = self.Iks1_(Ej)
-        
-        dRij_terms =  (Cij1 * ( CCik2 + CCjk2 + 2*Ik0 *np.cos(np.pi * self.tune)**2) + 
-                       Sij1 * ( SSik2 - SSjk2 + Ik0*np.sin(2*np.pi*self.tune)*(2*np.heaviside(Ei.muB-Ek.muB, 0)
-                           -2*np.heaviside(Ej.muB-Ek.muB, 0)-np.sign(Ei.muB-Ej.muB)))) 
-        dTij_terms = (Sij1 * (CCik2 - CCjk2 + 2*Ik0 * np.cos(np.pi * self.tune)**2) + 
-                      Cij1 * (-SSjk2 - SSik2 + Ik0 * np.sin(2*np.pi * self.tune) * (-2*np.heaviside(Ei.muB-Ek.muB, 0) 
-                           + 2*np.heaviside(Ej.muB-Ek.muB, 0) + np.sign(Ei.muB-Ej.muB))))
-        ana_dORM_dq = self.sgn * ( np.sqrt(Ei.betaB * Ej.betaB) 
-         / (8 * np.sin(np.pi * self.tune)* np.sin(2 * np.pi * self.tune)) 
-         * (Ijc1_L * dRij_terms + Ijs1_L * dTij_terms))
-        
-        return np.real(ana_dORM_dq) #Per assegurar que retorni un real bé
-    
-    def dRij_dqk_thick2_K3(self, Ei : Elements, Ej : Elements, Ek : Elements):
-        """Computes the dRij_dqk asssuming thick correctors WITH quadrupolar component and thick quadrupoles"""
-        Cij1 = self.Cabn(Ei, Ej, 1)
-        Cik2 = self.Cabn(Ei, Ek, 2)
-        Cjk2 = self.Cabn(Ej, Ek, 2)
-        Sij1 = self.Sabn(Ei, Ej, 1)
-        Sik2 = self.Sabn(Ei, Ek, 2)
-        Sjk2 = self.Sabn(Ej, Ek, 2)
-        
-        #Terms for the thick quadrupole formula      
-        
-        Ik0  = self.Ik0(Ek)
-        Iks2 = self.Iks2(Ek)
-        Ikc2 = self.Ikc2(Ek)
-        SSik2= Ikc2*Sik2-Iks2*Cik2
-        SSjk2= Ikc2*Sjk2-Iks2*Cjk2
-        CCik2= Ikc2*Cik2+Iks2*Sik2
-        CCjk2= Ikc2*Cjk2+Iks2*Sjk2
-
-        #Terms for thick correctors WITH quadrupole moment inside of them
-        Ijc1_L = self.Ikc1_(Ej)
-        Ijs1_L = self.Iks1_(Ej)
-        
-        dRij_terms =  (Cij1 * ( CCik2 + CCjk2 + 2*Ik0 *np.cos(np.pi * self.tune)**2) + 
-                       Sij1 * ( SSik2 - SSjk2 + Ik0*np.sin(2*np.pi*self.tune)*(2*np.heaviside(Ei.muB-Ek.muB, 0)
-                           -2*np.heaviside(Ej.muB-Ek.muB, 0)-np.sign(Ei.muB-Ej.muB)))) 
-        dTij_terms = (Sij1 * (CCik2 - CCjk2 + 2*Ik0 * np.cos(np.pi * self.tune)**2) + 
-                      Cij1 * (-SSjk2 - SSik2 + Ik0 * np.sin(2*np.pi * self.tune) * (-2*np.heaviside(Ei.muB-Ek.muB, 0) 
-                           + 2*np.heaviside(Ej.muB-Ek.muB, 0) + np.sign(Ei.muB-Ej.muB))))
-        ana_dORM_dq = self.sgn * ( np.sqrt(Ei.betaB * Ej.betaB) 
-         / (8 * np.sin(np.pi * self.tune)* np.sin(2 * np.pi * self.tune)) 
-         * (Ijc1_L * dRij_terms + Ijs1_L * dTij_terms))
-        
-        return np.real(ana_dORM_dq) #Per assegurar que retorni un real bé
-    
-    def ni_sum(self, Ei:Elements, Ej: Elements):
-        """ Calculates the dispersion in Ei generated by dipoles Ej in the ring
-        """
-        Ijc1 = self.Ijc1_L(Ej) 
-        Ijs1 = self.Ijs1_L(Ej) 
-        Rij_t = self.Rab_thin(Ei, Ej)
-        Tij_t = self.Tab_thin(Ei, Ej)
-        return np.sum(Ej.BendB*(Ijc1*Rij_t+Ijs1*Tij_t), axis = Ej._bAxis)
-        
-    def dni_dqk_sum(self, Ei : Elements, Ej: Elements, Ek: Elements):
-        """ Derivative of the dispersions in Ei with respect to given quadrupole
-        strengths Ek considering Ej dipoles in the ring... VALIDATED!!
-        #TODO: LACKS THE derivative with respect to integral terms!
-        
-        #TODO: IT DOES NOT WORK WELL AND HAS NOT BEEN VALIDATED!
-        """
-    
-        Cij1 = self.Cabn(Ei, Ej, 1)
-        Cik2 = self.Cabn(Ei, Ek, 2)
-        Cjk2 = self.Cabn(Ej, Ek, 2)
-        Sij1 = self.Sabn(Ei, Ej, 1)
-        Sik2 = self.Sabn(Ei, Ek, 2)
-        Sjk2 = self.Sabn(Ej, Ek, 2)
-        
-        #Terms for the thick quadrupole formula      
-        
-        Ik0  = self.Ik0(Ek)
-        Iks2 = self.Iks2(Ek)
-        Ikc2 = self.Ikc2(Ek)
-        SSik2= Ikc2*Sik2-Iks2*Cik2
-        SSjk2= Ikc2*Sjk2-Iks2*Cjk2
-        CCik2= Ikc2*Cik2+Iks2*Sik2
-        CCjk2= Ikc2*Cjk2+Iks2*Sjk2
-
-        #Terms for the dipoles, if they are CFD consider it as well through KB
-    
-        if (hasattr(Ej, "Bend")):
-            Ijc1 = self.Ikc1(Ej)
-            Ijs1 = self.Iks1(Ej)
-        else:
-            Ijc1 = self.Ikc1_(Ej)
-            Ijs1 = self.Iks1_(Ej)        
-
-        dRij_terms =  (Cij1 * ( CCik2 + CCjk2 + 2*Ik0 *np.cos(np.pi * self.tune)**2) + 
-                       Sij1 * ( SSik2 - SSjk2 + Ik0*np.sin(2*np.pi*self.tune)*(2*np.heaviside(Ei.muB-Ek.muB, 0)
-                           -2*np.heaviside(Ej.muB-Ek.muB, 0)-np.sign(Ei.muB-Ej.muB)))) 
-        dTij_terms = (Sij1 * ( CCik2 - CCjk2 + 2*Ik0 *np.cos(np.pi * self.tune)**2) + 
-                      Cij1 * ( -SSjk2 - SSik2 + Ik0*np.sin(2*np.pi*self.tune)*(-2*np.heaviside(Ei.muB-Ek.muB, 0)
-                           +2*np.heaviside(Ej.muB-Ek.muB, 0)+np.sign(Ei.muB-Ej.muB)))) 
-        
-        
-        
-        
-        dni_dqk =  -((Ej.BendB * np.sqrt(Ei.betaB * Ej.betaB)) 
-         / (8 * np.sin(np.pi * self.tune)* np.sin(2 * np.pi * self.tune)) 
-         * (Ijc1 * dRij_terms + Ijs1 * dTij_terms))
-        
-        return np.real(np.sum(dni_dqk, axis = Ej._bAxis))
-        
-    def dni_dqk_sum_mod(self, Ei : Elements, Ej: Elements, Ek: Elements):
-        """ 
-        MODIFIED VERSION FOR DEBUGGING
-        Derivative of the dispersions in Ei with respect to given quadrupole
-        strengths Ek considering Ej dipoles in the ring... VALIDATED!!
-        #TODO: LACKS THE derivative with respect to integral terms!
-        """
-    
-        Cij1 = self.Cabn(Ei, Ej, 1)
-        Cik2 = self.Cabn(Ei, Ek, 2)
-        Cjk2 = self.Cabn(Ej, Ek, 2)
-        Sij1 = self.Sabn(Ei, Ej, 1)
-        Sik2 = self.Sabn(Ei, Ek, 2)
-        Sjk2 = self.Sabn(Ej, Ek, 2)
-        
-        #Terms for the thick quadrupole formula      
-        
-        Ik0  = self.Ik0(Ek)
-        Iks2 = self.Iks2(Ek)
-        Ikc2 = self.Ikc2(Ek)
-        SSik2= Ikc2*Sik2-Iks2*Cik2
-        SSjk2= Ikc2*Sjk2-Iks2*Cjk2
-        CCik2= Ikc2*Cik2+Iks2*Sik2
-        CCjk2= Ikc2*Cjk2+Iks2*Sjk2
-    
-        #Terms for the dipoles, if they are CFD consider it as well through KB
-    
-        if (hasattr(Ej, "Bend")):
-            Ijc1 = self.Ikc1(Ej)
-            Ijs1 = self.Iks1(Ej)
-        else:
-            Ijc1 = self.Ikc1_(Ej)
-            Ijs1 = self.Iks1_(Ej)        
-    
-        dRij_terms =  (Cij1 * ( CCik2 + CCjk2 + 2*Ik0 *np.cos(np.pi * self.tune)**2) + 
-                       Sij1 * ( SSik2 - SSjk2 + Ik0*np.sin(2*np.pi*self.tune)*(2*np.heaviside(Ei.muB-Ek.muB, 0)
-                           -2*np.heaviside(Ej.muB-Ek.muB, 0)-np.sign(Ei.muB-Ej.muB)))) 
-        dTij_terms = 0*(Sij1 * ( CCik2 - CCjk2 + 2*Ik0 *np.cos(np.pi * self.tune)**2) + 
-                      Cij1 * ( -SSjk2 - SSik2 + Ik0*np.sin(2*np.pi*self.tune)*(-2*np.heaviside(Ei.muB-Ek.muB, 0)
-                           +2*np.heaviside(Ej.muB-Ek.muB, 0)+np.sign(Ei.muB-Ej.muB)))) 
-        
-        
-        
-        
-        dni_dqk =  -((Ej.BendB * np.sqrt(Ei.betaB * Ej.betaB)) 
-         / (8 * np.sin(np.pi * self.tune)* np.sin(2 * np.pi * self.tune)) 
-         * (Ijc1 * dRij_terms + Ijs1 * dTij_terms))
-        
-        return np.real(np.sum(dni_dqk, axis = Ej._bAxis))
-    
-    def dni_dqk_new(self, Ei : Elements, Ek: Elements):
-        """ 
-        Thin Derivative of dispersion from response matrix 
-        it is suposed to be used slicing elements 
-        slicing and summing thin elements
-        """
-    
-        Rik = self.Rab_thick2_K(Ei, Ek)
-        if not hasattr(Ek, 'avDispersion'):
-            Ek.average()
-        
-        return np.real(np.squeeze( -Ek.avDispersionB * Rik *Ek.LengthB))
-
-    def dni_dqk_integral(self, Ei: Elements, Ek: Elements):
-        """
-        GOOD NEW METHOD!!!
-        
-        Integral formula deduced to calculate the derivative 
-                        
-        Based on thin response for dispersion from a quadrupole and integrating
-        Dispersion along the element even if it has bending.
-        In bpm i due to quadrupole (or combined function dipole) 0
-    
-        This method is better when not applying fringe field corrections!
-        
-        
-        """
-        
-        #TODO: check etrance correction into dipoles due to quadrupole fringe,
-        #In principle it should make results even better but it makes them worse
-        #Apply entrace 
-        Cik1 = self.Cabn(Ei, Ek, 1)
-        Sik1 = self.Sabn(Ei, Ek, 1)
-        
-        Ik0  = self.Ik0(Ek)
-        Ikc1 = self.Ikc1(Ek)
-        Iks1 = self.Iks1(Ek)
-        Ikc2 = self.Ikc2(Ek)
-        Iks2 = self.Iks2(Ek)
-        
-        disp_k      = Ek.dispersionB
-        ddisp_k     = Ek.dispersionpB
-        source = 0
-        if hasattr(Ek, "Bend"):
-            source      = Ek.BendB/(Ek.LengthB*Ek.KB)
-        #disp term
-        term_1 = Cik1*(Ik0 + Ikc2)/2 + Ek.alphaB*Sik1*(Ik0-Ikc2)/2 + (Ek.alphaB*Cik1 + Sik1)*Iks2/2
-        #disp' term
-        term_2 = Ek.betaB*(Cik1*Iks2/2 + Sik1*(Ik0 - Ikc2)/2) 
-        #Source term (I just take it in the right dimension it must have to fix it  )
-        term_3 = 0*Sik1
-        if hasattr(Ek, "Bend"):
-            term_3 = Ek.betaB * Ek.LengthB * (Ikc1*Cik1 + Iks1*Sik1) - term_1
-
-        #OBSERVATION: the 1/L_k is already inside the definition of the Ik0, etc, terms!
-        dni_dqk = np.sqrt(Ei.betaB/Ek.betaB)/(2*np.sin(np.pi*self.tune))*(
-            disp_k*term_1 + ddisp_k*term_2 + source*term_3)
-        
-        return -np.real(dni_dqk)
-    
-    def dRij_dqk_thick23_disp_old(self, Ei : Elements, Ej : Elements, Ek : Elements, El : Elements):
-        """
-        Old formula for computing the derivative of dispersion using the definition
-        Computes the dRij_dqk dispersion term, which is relevant in the HORIZONTAL
-        transverse dimension, neglecting the derivative with respect to the mcf
-        Ei: BPMs,         1
-        Ej: correctors,   2
-        Ek: quadrupoles,  0
-        El: dipoles       0
-        THIS formula only applies for all Ek.
-        """
-        Ei = copy.deepcopy(Ei)
-        Ej = copy.deepcopy(Ej)
-        Ek = copy.deepcopy(Ek)
-        El = copy.deepcopy(El)
-        
-        Ei.broadcasters(1, 4)
-        Ej.broadcasters(2, 4)
-        Ek.broadcasters(0, 4)
-        El.broadcasters(3, 4)
-        
-        dni_dqk = np.squeeze(self.dni_dqk_sum(Ei, El, Ek))[:, :, None]
-        dnj_dqk = np.squeeze(self.dni_dqk_sum(Ej, El, Ek))[:, None, :] # This is the derivative at the entrance!
-        
-        Ei.broadcasters(1, 3)
-        Ej.broadcasters(2, 3)
-        Ek.broadcasters(0, 3)
-        
-        if not hasattr(Ej, 'avDispersion'):
-            Ej.average()
-        # 2. FIXED: Added the mandatory MINUS sign for the RF cavity response
-        ana_dORM_dq_disp = (dni_dqk *Ej.avDispersionB +dnj_dqk *Ei.dispersionB ) / (self.mcf * self.circumference)
-        
-        return np.real(ana_dORM_dq_disp)
-        
-    def dRij_dqk_thick23_disp(self, Ei : Elements, Ej : Elements, Ek : Elements):
-        """Computes the dRij_dqk dispersion term, which is relevant in the HORIZONTAL
-        transverse dimension, neglecting the derivative with respect to the mcf
-        Ei: BPMs,         1
-        Ej: correctors,   2
-        Ek: quadrupoles,  0
-        THIS formula only applies for all Ek.
-        """
-
-        Ej2 = Elements(self.ring, self.all_optics, Ej._ind -1, self.dir_ind, self.sgn)
-        Ej2.broadcasters(Ej._bAxis, Ej._ndim)
-        dni_dqk = self.dni_dqk_integral(Ei, Ek)
-        dnj_dqk = self.dni_dqk_integral(Ej, Ek)  # This is the derivative at the entrance!
-        ddnj_ds_dqk = (dnj_dqk- self.dni_dqk_integral(Ej2, Ek))/Ej2.LengthB
-        
-        """ Canvi que feia als broadcasters per alguna raó...
-        Ei.broadcasters(1, 3)
-        Ej.broadcasters(2, 3)
-        Ek.broadcasters(0, 3)
-        """
-        if not hasattr(Ej, 'avDispersion'):
-            Ej.average()
-
-        #TODO: The derivative with respect to the MCF has to be added, but it is a long integral of disp^2 inside the quadrupoles
-        
-        ana_dORM_dq_disp = -(dni_dqk *Ej.avDispersionB +(dnj_dqk + ddnj_ds_dqk*Ej.LengthB/2)*Ei.dispersionB ) / (self.mcf * self.circumference)
-        
-        return np.real(ana_dORM_dq_disp)
-        
+    """    
     def dRij_dEnergy(self, Ei: Elements, Ej: Elements, Ek1: Elements, Ek2: Elements):
         """
         Calculates the response matrix to energy numerically.
@@ -804,9 +148,8 @@ class AnaORM:
         
         term1 = (eta_k * geometry) / (self.mcf * self.circumference)
         
-        
         return term1
-    
+
     
     def dCFD_denergy(self, Ei: Elements, Ej: Elements, Ek: Elements):
         """
@@ -846,7 +189,11 @@ class AnaORM:
         d_delta_dqk = term1 + term2
         
         return d_delta_dqk
-    
+    """
+    #########################################################################
+    ### Pure Dipole ORM Jacobian Formulas
+    #########################################################################
+    """
     def dRij_dk_energy_term(self, Ei: Elements, Ej: Elements, Ek: Elements, dRij_dEnergy, dEnergy):
         """
         Uses derivative with respect to energy and energy response matrix to calculate the term corresponding
@@ -1064,6 +411,7 @@ class AnaORM:
         dRij_terms =  (Cij1 * ( CCilk2 + CCjlk2 + 2*Iijk0 *np.cos(np.pi * self.tune)**2) + 
                        Sij1 * ( SSilk2 - SSjlk2 
                      + np.sin(2*np.pi*self.tune)*(2*DDilk2 - 2*DDjlk2 - Iijk0*np.sign(Ei.muB-Ej.muB)))) 
+        
         dTij_terms = (Sij1 * (CCilk2 - CCjlk2 + 2*Iijk0 * np.cos(np.pi * self.tune)**2) + 
                       Cij1 * (-SSjlk2 - SSilk2 
                      + np.sin(2*np.pi*self.tune)*(-2*DDilk2 + 2*DDjlk2 + Iijk0*np.sign(Ei.muB-Ej.muB)))) 
@@ -1075,10 +423,10 @@ class AnaORM:
         
         return np.squeeze( np.real(ana_dORM_dq) ) #Per assegurar que retorni un real bé
     
-    
     def aMCF(self, Em: Elements,En: Elements):
-        """Calculates the mcf for a ring due to dipoles
-        Diples in the first and second component analytically
+        """Calculates the mcf for a ring due to dipoles analytically
+        Diples in the first and second component 
+        
         """
         Imc1 = self.Ikc1(Em)
         Ims1 = self.Iks1(Em)

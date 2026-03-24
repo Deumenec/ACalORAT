@@ -39,7 +39,7 @@ step           =  1e-6
 
 p              ={"lin_all"        :  False,  #To turn off higher order multipoles
                  "max_ind"        :  2,      #Cutoff index in polynomB, simplifies the ring for certain calculations
-                 "calculate"      :  True}
+                 "calculate"      :  False}
 
 
 ###############################################################################
@@ -48,7 +48,6 @@ p              ={"lin_all"        :  False,  #To turn off higher order multipole
 
 ring, ind = read.ALBAII(ROOT  / "data" / "ring_a2.mat")
 
-ind["dip"] = ind["dip"][0:10]
 
 if p["lin_all"] == True: #DESACTIVA TOTS ELS Sextupols i ordres superiors 
     for element in filter(at.checkattr("PolynomB"), ring):
@@ -123,8 +122,9 @@ cORM.cor.broadcasters(1, 4)
 cORM.dip.broadcasters(2, 4)
 cORM.sex.broadcasters(3, 4)
 
-x_sex_ana  = cORM.dxldCFDk(cORM.bpm, cORM.cor, cORM.dip, cORM.sex)
-dx_sex_ana = cORM.dpxldCFDk(cORM.bpm, cORM.cor, cORM.dip, cORM.sex)
+x_sex_ana  = x_sex #cORM.dxldCFDk(cORM.bpm, cORM.cor, cORM.dip, cORM.sex)
+dx_sex_ana = dx_sex #cORM.dpxldCFDk(cORM.bpm, cORM.cor, cORM.dip, cORM.sex)
+dKicksH_dCFD_ana = 0
 #TODO: write the theta the theta analytically and validate!
 dtheta_sex = AnaORM.extract_kicks(dKicksH_dCFD,ind["cor"]["h"], ind["sex"])
 
@@ -139,17 +139,18 @@ cORM.cor.broadcasters(1, 3)
 cORM.dip.broadcasters(2, 3)
 #Sembla malament l'horitzontal total fet així!
 thickh = ( cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip) 
-          + cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.dip) #Aquí aquest terme ajuda però falta bastanta cosa!!!
+          + 0*cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.dip) #Aquí aquest terme ajuda però falta bastanta cosa!!!
           + cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["h"], denergy))
 
-
+a = cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["h"], denergy)
+a = np.transpose(a, (2, 0, 1))
 cORM.bpm.broadcasters(0, 4)
 cORM.cor.broadcasters(1, 4)
 cORM.dip.broadcasters(2, 4)
 cORM.sex.broadcasters(3, 4)
 
 
-AAGOATh = cORM.dRi_dk_sex_term(cORM.bpm, cORM.cor, cORM.dip, cORM.sex, x_sex_ana, dx_sex_ana, dtheta_sex)
+AAsexth = cORM.dRi_dk_sex_term(cORM.bpm, cORM.cor, cORM.dip, cORM.sex, x_sex_ana, dx_sex_ana, dtheta_sex)
 
 
 #TODO: Write the sextupole term in here!
@@ -163,12 +164,12 @@ cORM.cor.broadcasters(1, 3)
 cORM.dip.broadcasters(2, 3)
 
 #La formula validada per els CFD que prediu perfecte el canvi amb la component quadrupolar
-#Més el terme corresponent a la vari44ació de l'energia, recordem que aquí les dimensions de
+#Més el terme corresponent a la variació de l'energia, recordem que aquí les dimensions de
 #Broadcasting estàn hard-coded així que millor no tocar res sense validar
 
 
 thickv = (cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip) 
-          + cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["v"], denergy))
+          + 0*cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["v"], denergy))
 
 #Finally, we add the sextupole term by rebuilding the broadcasters
 
@@ -178,7 +179,7 @@ cORM.dip.broadcasters(2, 4)
 cORM.sex.broadcasters(3, 4)
 
 
-AAGOATv = cORM.dRi_dk_sex_term(cORM.bpm, cORM.cor, cORM.dip, cORM.sex, x_sex_ana, dx_sex_ana, dtheta_sex)
+AAsextv = cORM.dRi_dk_sex_term(cORM.bpm, cORM.cor, cORM.dip, cORM.sex, x_sex_ana, dx_sex_ana, dtheta_sex)
 
 
 
@@ -190,12 +191,16 @@ AAGOATv = cORM.dRi_dk_sex_term(cORM.bpm, cORM.cor, cORM.dip, cORM.sex, x_sex_ana
 
 thickv = np.transpose(thickv, (2,0,1))
 thickh = np.transpose(thickh, (2,0,1))
-AAGOATv = np.transpose(AAGOATv, (2,0,1))
-AAGOATh = np.transpose(AAGOATh, (2,0,1))
+AAsextv = np.transpose(AAsextv, (2,0,1))
+AAsexth = np.transpose(AAsexth, (2,0,1))
 #La vertical sembla que està bastant aprop!
-plot_utils.plot_both_Zeus(num_dORM_dqV, num_dORM_dqH, thickv, thickh)
+
+av = -num_dORM_dqV +thickv
+ah = num_dORM_dqH- thickh
+
+plot_utils.plot_both_Zeus(num_dORM_dqV , num_dORM_dqH, thickv, thickh)
 
 
-a = num_dORM_dqV -thickv
+
 
 

@@ -36,7 +36,7 @@ direction      = 'h' #v: vertical h: horizontal (SI NOMÉS ES FA EL CÀLCUL D'UN
 step_exp       =  5
 step           =  10**(-step_exp)
 read_numerical =  True
-dispersion     =  True
+dispersion     =  False
 lin_all        =  True  #To turn off higher order multipoles
 max_ind        =  2     #cutoff index in polynomB
 
@@ -124,7 +124,7 @@ denergy = np.real(cORM.ddip_denergy(cORM.dip))
 thickh = (cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["h"], dEnergyH)) 
 
 
-a_bend = cORM.dRij_dbend_thick23_disp(cORM.bpm, cORM.cor, cORM.CFD)
+    a_bend = cORM.dRij_dbend_thick23_disp(cORM.bpm, cORM.cor, cORM.CFD)
 
 
 
@@ -152,7 +152,6 @@ aa = thickh-dORMH
 
 plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
 
-aaa = a_bend/aa*1000
 
 
 

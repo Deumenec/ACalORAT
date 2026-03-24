@@ -32,11 +32,11 @@ lattice_file   = 'ring_a2.mat' #Read ALBA II lattice ring_a2.mat or THERING.mat 
 lattice_folder = 'lattices' #Important quan treballis amb aquests!
 results        =  SAVE  #A1 for the ALBA lattice and A2 for the ALBAII lattice and CFDA2
 direction      = 'h' #v: vertical h: horizontal (SI NOMÉS ES FA EL CÀLCUL D'UNA)
-step_exp       =  8
+step_exp       =  9
 step           =  10**(-step_exp)
-read_numerical =  True
-dispersion     =  False
-lin_all        =  False  #To turn off higher order multipoles
+compute        =  False
+dispersion     =  True
+lin_all        =  True  #To turn off higher order multipoles
 max_ind        =  2     #cutoff index in polynomB
 
 ###############################################################################
@@ -101,11 +101,11 @@ def disp_i_dk(ring, quad):
     
     return (new_disp_i-new_disp_j)/(2*step)
 
-"""   
+ 
 di_dk = np.zeros((len(ind["dip"]),len(ind["bpm"]))) 
 
 
-if False:
+if compute:
     for i in range(len(ind["dip"])):
         di_dk[i] = disp_i_dk(ring, ind["dip"][i])
     np.save(SAVE / "di_dk",di_dk )
@@ -119,19 +119,43 @@ cORM = AnaORM.AnaORM(ring,"h", ind)
 cORM.assign_optics()
 cORM.bpm.broadcasters(1, 2)
 cORM.dip.broadcasters(0, 2)
-cORM.cor.broadcasters(0, 2)
+cORM.quad.broadcasters(0, 2)
 
-di_dk_num = -(cORM.dip.LengthB**()) * cORM.Rab_thick2_K(cORM.bpm, cORM.dip)
-denergy_test   = cORM.ddip_denergy(cORM.dip)[:, None] *cORM.bpm.dispersionB
+di_dk_ana =  - (cORM.Rab_thick2_K(cORM.bpm, cORM.dip) + cORM.Rab_thick2_disp_K(cORM.bpm, cORM.dip))*cORM.dip.LengthB
+
+aa = cORM.Rab_thick2_disp_K(cORM.bpm, cORM.dip)
+
+cORM = AnaORM.AnaORM(ring,"h", ind)
+cORM.assign_optics()
+cORM.bpm.broadcasters(1, 3)
+cORM.dip.broadcasters(0, 3)
+cORM.quad.broadcasters(2, 3)
+cORM.CFD.broadcasters(2, 3)
+
+denergy   = cORM.ddip_denergy(cORM.dip)[:, None, None]*cORM.dip.KB/cORM.dip.BendB
+
+quad1 = cORM.dni_dqk_integral(cORM.bpm, cORM.CFD)
+quad2 = cORM.dni_dqk_integral(cORM.bpm, cORM.quad)
+
+delta_K_CFD  = -cORM.CFD.KB * denergy
+delta_K_quad = -cORM.quad.KB * denergy
+
+# Multiply the derivative by Delta K and sum!
+chromatic_disp =np.real( np.sum(quad1 * delta_K_CFD, axis=2) 
+                 + np.sum(quad2 * delta_K_quad, axis=2) )
+
+di_dk_test = di_dk_ana + chromatic_disp
+
+
+#def disp_i_dkick(ring, cor):
+    
 
 """
-
-def disp_i_dkick(ring, cor):
-    """
     For a given quad, we calculate the derivative of dispersion in bpms in the 
     h transverse dimension with respect to changing its strength.
     quad: index of the changed quad
     """
+"""
     ring = copy.deepcopy(ring)
     ring[cor].KickAngle[0] += step
     optics = at.get_optics(ring, refpts=ind["bpm"])
@@ -146,12 +170,10 @@ def disp_i_dkick(ring, cor):
 di_dk = np.zeros((len(ind["cor"]["h"]),len(ind["bpm"]))) 
 
 
-if True:
-    ring.disable_6d()
+if compute:
     for i in range(len(ind["cor"]["h"])):
         di_dk[i] = disp_i_dkick(ring, ind["cor"]["h"][i])
     np.save(SAVE / "di_dk",di_dk )
-    ring.enable_6d()
     
 di_dk = np.load(SAVE / "di_dk.npy")
 
@@ -161,4 +183,5 @@ cORM.bpm.broadcasters(1, 2)
 cORM.cor.broadcasters(0, 2)
 
 di_dk_num = cORM.Rab_thick2_(cORM.bpm, cORM.cor)
+"""
 

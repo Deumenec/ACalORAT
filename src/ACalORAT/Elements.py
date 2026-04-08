@@ -3,7 +3,7 @@
 """
 Created on Tue Mar 24 14:11:27 2026
 
-@author: deumenec
+@author: dhuerta
 """
 
 import numpy as np
@@ -37,6 +37,8 @@ class Elements:
     
     Attributes
     ----------
+    If broadcasting is applied, all attributes have another duplicate ending with "B" broadcasting in the necessary dimensions.
+
     beta : np.ndarray (complex)
     
         The betatron amplitude function ($\beta$) at the entrance of the elements.

@@ -105,20 +105,21 @@ dRij_dEnergy = numerical.quickdORMdEnergy(ring, ind)
 
 cORM = AnaORM.AnaORM(ring,"h", ind)
 cORM.assign_optics()
-cORM.dip.correct_entrance()
 cORM.bpm.broadcasters(0, 3)
 cORM.cor.broadcasters(1, 3)
-cORM.dip.broadcasters(2, 3)
+cORM.dip.broadcasters(2, 3)         
 
 #This term is also needed for vertical!
 denergy = cORM.dCFD_denergy(cORM.bpm, cORM.cor, cORM.dip)
 
 #Sembla malament l'horitzontal total fet així!
-thickh = ( cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip) 
+thickh = ( cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.dip) 
           + cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.dip) #Aquí aquest terme ajuda però falta bastanta cosa!!!
           + cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["h"], denergy))
 
 
+aab = cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.dip) 
+aac = cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["h"], denergy)
 #Vertical derivative calculation:
     
 cORM = AnaORM.AnaORM(ring,"v", ind)
@@ -133,7 +134,7 @@ cORM.dip.broadcasters(2, 3)
 #Broadcasting estàn hard-coded així que millor no tocar res sense validar
 
 
-thickv = (cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip) 
+thickv = (cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.dip) 
           + cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["v"], denergy))
 
 
@@ -148,7 +149,7 @@ thickv = np.transpose(thickv, (2,0,1))
 thickh = np.transpose(thickh, (2,0,1))
 
 #La vertical sembla que està bastant aprop!
-plot_utils.plot_both_Zeus(num_dORM_dqV, num_dORM_dqH, thickv, thickh)
+plot_utils.plot_both_Zeus(num_dORM_dqV, num_dORM_dqH, thickv, thickh,xlabel = "CFD",  SAVE = SAVE)
 
 
 

@@ -33,24 +33,24 @@ for i in ind1["cor"]["h"]: ring1[i].KickAngle = np.array([0,0])
 for i in ind1["cor"]["v"]: ring1[i].KickAngle = np.array([0,0])
 
 
-d = "h" # v or h
+d = "v" # v or h
 if CALC:
     ORM_AI_ana  = ana_utils.ORM(ring0, ind0, d)
     ORM_AII_ana = ana_utils.ORM(ring1, ind1, d)
     ORM_AI_num  = numerical.ORM(ring0, ind0, d)
     ORM_AII_num = numerical.ORM(ring1, ind1, d)
     #Save after calculating
-    np.save(SAVE / "ORM_AI_ana", ORM_AI_ana)
-    np.save(SAVE / "ORM_AII_ana", ORM_AII_ana)
-    np.save(SAVE / "ORM_AI_num", ORM_AI_num)
-    np.save(SAVE / "ORM_AII_num", ORM_AII_num)
+    np.save(SAVE / (d+ "ORM_AI_ana"), ORM_AI_ana)
+    np.save(SAVE / (d+ "ORM_AII_ana"), ORM_AII_ana)
+    np.save(SAVE / (d+ "ORM_AI_num"), ORM_AI_num)
+    np.save(SAVE / (d+ "ORM_AII_num"), ORM_AII_num)
     
 else:
     try:
-        ORM_AI_ana = np.load(SAVE /"ORM_AI_ana.npy")
-        ORM_AII_ana = np.load(SAVE /"ORM_AII_ana.npy")
-        ORM_AI_num = np.load(SAVE /"ORM_AI_num.npy")
-        ORM_AII_num = np.load(SAVE /"ORM_AII_num.npy")
+        ORM_AI_ana = np.load(SAVE  /d+"ORM_AI_ana.npy")
+        ORM_AII_ana = np.load(SAVE /d+"ORM_AII_ana.npy")
+        ORM_AI_num = np.load(SAVE  /d+"ORM_AI_num.npy")
+        ORM_AII_num = np.load(SAVE /d+"ORM_AII_num.npy")
 
         
     except:

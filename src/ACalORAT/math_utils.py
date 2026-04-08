@@ -15,10 +15,15 @@ def symetric_error(arrA, arrB, dims):
     Parameters
     ----------
     arrA : np.array
+
         reference array
+
     arrB : np.array
+
         array that is compared to the refecence
+        
     dim : np.array
+
         contracted dimensions
 
     Returns

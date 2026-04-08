@@ -113,7 +113,7 @@ def plot_both_Zeus(ORMv, ORMh, nORMv, nORMh,  latex = False, SAVE = None, title 
     if latex == True:
         rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
         rc('text', usetex=True)
-    fig, axis = plt.subplots(1,2,figsize=(13,3))
+    fig, axis = plt.subplots(1,2,figsize=(10,3))
     
     if title is not None: fig.suptitle(title, fontsize = 20)
     fig.subplots_adjust(top=0.85)

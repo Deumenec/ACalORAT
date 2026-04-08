@@ -111,7 +111,7 @@ aa = np.squeeze(cORM.Rab_thick2_(cORM.bpm, cORM.cor))
 #Terms for the energy perturbation:    
 
 #dRijdEnergy_num = numerical.dORMdEnergy(ring, ind)
-adRijdEnergy_ana= cORM.dRij_dEnergy(cORM.bpm, cORM.cor, cORM.quad, cORM.CFD)
+#adRijdEnergy_ana= cORM.dRij_dEnergy(cORM.bpm, cORM.cor, cORM.quad, cORM.CFD)
 adRijdEnergy_quick = np.array(numerical.quickdORMdEnergy(ring, ind)["v"])
 
 Rij = np.sum( cORM.Rab_thick2_(cORM.bpm, cORM.cor), axis = 0)
@@ -125,7 +125,7 @@ cORM2.cor.broadcasters(1, 3)
 cORM2.dip.broadcasters(2, 3)
 
 Rij_bo = np.squeeze(cORM2.Rab_thick2_(cORM2.bpm, cORM2.cor))
-delta_dk = cORM2.dRij_dCFD_energy(cORM2.bpm, cORM2.cor, cORM2.dip)
+delta_dk = cORM2.dCFD_denergy(cORM2.bpm, cORM2.cor, cORM2.dip)
 
   
 #delta_dk = cORM.dRij_dCFD_energy(cORM.bpmh, cORM.corh, cORM.diph)[0:26]
@@ -148,15 +148,17 @@ ana_energy = np.real(delta_dk)
 
 # Fixed signs, removed Length, and added mcf_val * ring.circumference to the denominator
 
-num_energy = np.real(-dFreq_dCFD / (mcf_val * ring.get_rf_frequency()) + (cORM2.dip.avDispersion * (cORM2.dip.Bend / cORM2.dip.K))[0:26] / (mcf_val * ring.circumference))
+num_energy = np.real(-dFreq_dCFD / (mcf_val * ring.get_rf_frequency()) + (cORM2.dip.avDispersion * (cORM2.dip.Bend / cORM2.dip.K)) / (mcf_val * ring.circumference))
 
-
-plt.plot(ana_energy[0:26], color = "green", label = "Energia analítica")
-plt.plot(energy, color = "red", label = "Energia numèrica", linestyle = "--")
-
-
-plt.plot(num_energy, color = "blue", label = "Estimació energia numèrica", linestyle = "--") 
+plt.figure(figsize=(6, 3))
+plt.tight_layout()
+plt.plot(ana_energy, color = "green", label = "Analytical Energy")
+plt.plot(energy, color = "blue", label = "Numerical Energy", linestyle = "--")
+plt.xlabel("CFD")
+plt.ylabel("Energy change")
+#plt.plot(num_energy, color = "blue", label = "Estimació energia numèrica", linestyle = "--") 
 plt.legend()
+plt.savefig("energy.pdf")
 plt.show()
 
 
@@ -185,8 +187,9 @@ cORM3.add_element("presex", ind["sex"]-1, "h")
 cORM3.presex.broadcasters(3, 4)
 
     
-x_sex_ana = np.real(cORM3.dxldCFDk(cORM3.bpm, cORM3.cor, cORM3.dip, cORM3.sex)[0:26, :])
-x_sex_ana_0 = np.real(cORM3.dxldCFDk(cORM3.bpm, cORM3.cor, cORM3.dip, cORM3.presex)[0:26, :])
+x_sex_ana = np.real(cORM3.dxldCFDk(cORM3.bpm, cORM3.cor, cORM3.dip, cORM3.sex))
+
+x_sex_ana_0 = np.real(cORM3.dxldCFDk(cORM3.bpm, cORM3.cor, cORM3.dip, cORM3.presex))
 dx_sex_ana = (x_sex_ana-x_sex_ana_0)/cORM3.presex.Length
 
 

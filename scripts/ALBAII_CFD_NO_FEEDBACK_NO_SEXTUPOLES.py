@@ -116,7 +116,7 @@ cORM.CFD.broadcasters(2, 3)
 denergy = cORM.ddip_denergy(cORM.dip)
 
 
-thickh = (cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.CFD) 
+thickh = (cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.CFD) 
           + cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.CFD)
           + cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["h"], denergy)) 
 
@@ -130,19 +130,19 @@ cORM.bpm.broadcasters(0, 3)
 cORM.cor.broadcasters(1, 3)
 cORM.dip.broadcasters(2, 3)
 
-thickv = (cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip)
+thickv = (cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.dip)
           + cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["v"], denergy)
-          + cORM.dRij_dk_fringe(cORM.bpm, cORM.cor, cORM.dip))
+          + cORM.dRij_dk_fringe_term(cORM.bpm, cORM.cor, cORM.dip))
 
 
-aa = cORM.dRij_dk_fringe(cORM.bpm, cORM.cor, cORM.dip)
+aa = cORM.dRij_dk_fringe_term(cORM.bpm, cORM.cor, cORM.dip)
 
 ##########################################################
 # Comparisons
 ##########################################################
 
 thickv = np.transpose(thickv, (2,0,1))
-thickh = np.transpose(thickh, (2,0,1))
+thickh = -  np.transpose(thickh, (2,0,1))
 
 
 plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)

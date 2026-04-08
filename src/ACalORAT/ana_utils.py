@@ -3,7 +3,7 @@
 """
 Created on Wed Feb 18 12:43:48 2026
 
-@author: deumenec
+@author: dhuerta
 
 Validated standard methods using the defined functions in AnaORM to compute relevant quantities
 """

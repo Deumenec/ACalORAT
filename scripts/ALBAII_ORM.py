@@ -4,7 +4,8 @@
 Created on Fri Dec  5 22:49:20 2025
 
 @author: deumenec
-Main code to do everyfg!
+
+Main code to do everything!
 """
 
 import os
@@ -31,7 +32,7 @@ lattice_file   = 'ring_a2.mat' #Read ALBA II lattice ring_a2.mat or THERING.mat 
 lattice_folder = 'lattices' #Important quan treballis amb aquests!
 results        =  SAVE / 'A2' #A1 for the ALBA lattice and A2 for the ALBAII lattice and CFDA2
 direction      = 'v' #v: vertical h: horizontal (SI NOMÉS ES FA EL CÀLCUL D'UNA)
-step_exp       =  5
+step_exp       =  6
 step           =  10**(-step_exp)
 read_numerical =  True
 dispersion     =  True  #Important ja que sino tot petaria amb la cromaticitat! calcular les matrius amb dispersió.
@@ -128,6 +129,6 @@ cORM.dip.broadcasters(0, 3)
 thickh = cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.quad) + cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.quad)
 ##########################################################
 
-plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
+plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh, SAVE = results)
 
 

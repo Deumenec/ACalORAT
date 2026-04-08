@@ -36,7 +36,7 @@ direction      = 'h' #v: vertical h: horizontal (SI NOMÉS ES FA EL CÀLCUL D'UN
 step_exp       =  5
 step           =  10**(-step_exp)
 read_numerical =  True
-dispersion     =  False
+dispersion     =  True
 lin_all        =  True  #To turn off higher order multipoles
 max_ind        =  2     #cutoff index in polynomB
 
@@ -124,9 +124,9 @@ denergy = np.real(cORM.ddip_denergy(cORM.dip))
 thickh = (cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["h"], dEnergyH)) 
 
 
-    a_bend = cORM.dRij_dbend_thick23_disp(cORM.bpm, cORM.cor, cORM.CFD)
+a_bend = cORM.dRij_dbend_thick23_disp(cORM.bpm, cORM.cor, cORM.CFD)
 
-
+thickh += a_bend
 
 cORM = AnaORM.AnaORM(ring,"v", ind)
 cORM.assign_optics()
@@ -134,7 +134,7 @@ cORM.bpm.broadcasters(0, 3)
 cORM.cor.broadcasters(1, 3)
 cORM.dip.broadcasters(2, 3)
 
-thickv = (0*cORM.dRij_dk_fringe(cORM.bpm, cORM.cor, cORM.dip)
+thickv = (0#0*cORM.dRij_dk_fringe(cORM.bpm, cORM.cor, cORM.dip)
     +cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["v"], dEnergyV)) 
 
 
@@ -146,9 +146,17 @@ thickv = (0*cORM.dRij_dk_fringe(cORM.bpm, cORM.cor, cORM.dip)
 thickv = np.transpose(thickv, (2,0,1))
 thickh = np.transpose(thickh, (2,0,1))
 
-a_bend = np.transpose(a_bend, (2,0,1))  
+"""
+dORMV = np.transpose(dORMV, (2,0,1))
+dORMH = np.transpose(dORMH, (2,0,1))
+thickv = np.transpose(thickv, (2,0,1))
+thickh = np.transpose(thickh, (2,0,1))
 
-aa = thickh-dORMH
+dORMV = np.transpose(dORMV, (2,0,1))
+dORMH = np.transpose(dORMH, (2,0,1))
+thickv = np.transpose(thickv, (2,0,1))
+thickh = np.transpose(thickh, (2,0,1))
+"""
 
 plot_utils.plot_both_Zeus(dORMV, dORMH, thickv, thickh)
 

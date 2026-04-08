@@ -3,14 +3,14 @@
 """
 Created on Sat Dec  6 12:43:51 2025
 
-@author: Domènec
+@author: dhuerta
 
 Helper functions to load lattices into AT.
 """
 
 import at
 import numpy as np
-import re #Per les regular expresions
+import re 
 
 
 def ALBA(path):

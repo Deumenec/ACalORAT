@@ -100,7 +100,7 @@ else:
 
 
 #Now here we calculate numerically the Jacobian with quadrupoles tu
-dRij_dEnergy = numerical.quickdORMdEnergy(ring, ind)
+dRij_dEnergy = numerical.quickdORMdEnergy(ring, ind, c_disp =0)
 
 
 #Horizontal derivative calculation:

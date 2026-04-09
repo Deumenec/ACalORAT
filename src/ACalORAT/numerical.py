@@ -583,7 +583,11 @@ def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
         x_sexp= np.array([i[1] for i in new_orbit])[ind["sex"]]
         energy = np.average(new_orbit[:,4])
         
-        disp = at.get_optics(local_ring, refpts=range(len(ring)))[2]["dispersion"]
+        new_optics = at.get_optics(ring, refpts=range(len(ring)))[2]
+        
+        bpm_disp = np.array([i[0] for i in new_optics["dispersion"]])[ind["sex"]]
+        
+        disp = new_optics["dispersion"]
         avdisp = compute_average_dispersion(local_ring, ind["cor"]["h"],disp )
         cond = np.sum(t_kicks["h"] * avdisp)
         print(f"AFTER CORRECTION, THE ENERGY CHANGE IN CORRECTORS IS: {cond}")
@@ -595,7 +599,8 @@ def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
             "kicks_v": t_kicks["v"],
             "sex": x_sex,
             "sexp": x_sexp,
-            "denergy" : energy
+            "denergy" : energy,
+            "bpm_disp": bpm_disp
         }
     
     # Computing perturved states
@@ -615,7 +620,8 @@ def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
         "dKicks_v": (state_plus["kicks_v"] - state_minus["kicks_v"]) / denominator,
         "dsex":     {"0": (state_plus["sex"] - state_minus["sex"]) / denominator, 
                      "1": (state_plus["sexp"] - state_minus["sexp"]) / denominator},
-        "denergy": (state_plus["denergy"] - state_minus["denergy"]) / denominator
+        "denergy": (state_plus["denergy"] - state_minus["denergy"]) / denominator,
+        "ddisp":   (state_plus["bpm_disp"] - state_minus["bpm_disp"]) / denominator
     }
 
 def dORM_dCFD(ring, ind ,step, num=None, multithread=False, method="Cor_SVD"):
@@ -660,6 +666,7 @@ def dORM_dCFD(ring, ind ,step, num=None, multithread=False, method="Cor_SVD"):
     x_sex = np.zeros((n_calcs, len(ind["sex"])))
     dx_sex = np.zeros((n_calcs, len(ind["sex"])))
     energy = np.zeros(n_calcs)
+    dni_dCFD =  np.zeros((n_calcs, len(ind["bpm"])))
     
     # 3. Execution (Single or Multi-thread)
     results = []
@@ -685,11 +692,12 @@ def dORM_dCFD(ring, ind ,step, num=None, multithread=False, method="Cor_SVD"):
         dKicksH_dCFD[i] = res["dKicks_h"]
         dKicksV_dCFD[i] = res["dKicks_v"]
         x_sex[i]        = res["dsex"]["0"]
-        dx_sex[i]        = res["dsex"]["1"]
+        dx_sex[i]       = res["dsex"]["1"]
         energy[i]       = res["denergy"]
+        dni_dCFD[i]     = res["ddisp"]
       
     print("Calculation Finished.")
-    return num_dORM_dqH, num_dORM_dqV, dFreq_dCFD, dKicksH_dCFD, dKicksV_dCFD, x_sex, dx_sex,energy
+    return num_dORM_dqH, num_dORM_dqV, dFreq_dCFD, dKicksH_dCFD, dKicksV_dCFD, x_sex, dx_sex,energy, dni_dCFD
 
 
     

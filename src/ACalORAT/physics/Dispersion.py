@@ -4,8 +4,7 @@ from .BaseIntegrals import BaseIntegrals
 
 class Dispersion(BaseIntegrals):
     """
-    Dispersion Analytical formulas with respect to changing only a quadrupole for different ring parameters such as closed 
-    orbit distortions and chromaticity.
+    Dispersion Analytical formulas and Jacobians
     """
     
     def ni_sum(self, Ei:Elements, Ej: Elements):
@@ -192,12 +191,25 @@ class Dispersion(BaseIntegrals):
         return np.real(np.sum(result, axis = El._bAxis))
         
         
-    def dni_dhk_integral(self, Ei:Elements, Ej: Elements):
+    def dni_dhk_feedback(self, Ei:Elements, Ej: Elements, Ek: Elements, delta, kicks, dni_de, dRikde, dRijde):
         """
-        Calculates the change in dispersion due to changing a pure dipole in the ring
+        Calculates the change in dispersion in Ei due to changing a dipole Ek
+        in the ring considering the active feedback by correctors Ej for a
+        nominal change in the quadrupole component in CFDs
+        
+        delta: energy_derivative
         """
-        #TODO: pot ser molt i molt guai si la aconsegueixo fer funcionar, sembla que fer "purament" Rij no està bé!
+        geometry = Ek.BendB / Ek.KB
         
-        return    
+        term1 = self.dni_dqk_integral
         
+        term2 = geometry*dRikde
+        
+        term3 = kicks@dRijde
+        
+        term4 = dni_de*delta
+        
+        return term1 + term2 + term3 + term4     
+        
+    
     

@@ -115,11 +115,11 @@ denergy = cORM.dCFD_denergy(cORM.bpm, cORM.cor, cORM.dip)
 #Sembla malament l'horitzontal total fet així!
 thickh = ( cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.dip) 
           + cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.dip) #Aquí aquest terme ajuda però falta bastanta cosa!!!
-          + cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["h"], denergy))
+          + cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["h"], energy))
 
 
 aab = cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.dip) 
-aac = cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["h"], denergy)
+aac = cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["h"], energy)
 #Vertical derivative calculation:
     
 cORM = AnaORM.AnaORM(ring,"v", ind)
@@ -135,7 +135,7 @@ cORM.dip.broadcasters(2, 3)
 
 
 thickv = (cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.dip) 
-          + cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["v"], denergy))
+          + cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["v"], energy))
 
 
 

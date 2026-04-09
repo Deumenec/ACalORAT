@@ -36,7 +36,7 @@ results        = 'A2' #A1 for the ALBA lattice and A2 for the ALBAII lattice and
 step           =  1e-5
 
 p              ={"lin_all"        :  True,  #To turn off higher order multipoles
-                 "max_ind"        :  3,      #Cutoff index in polynomB, simplifies the ring for certain calculations
+                 "max_ind"        :  2,      #Cutoff index in polynomB, simplifies the ring for certain calculations
                  "calculate"      :  False}
 
 
@@ -67,7 +67,7 @@ for i in ind["cor"]["v"]: ring[i].KickAngle = np.array([0,0])
 ###############################################################################
 
 pathCFD = "Cor_SVD"
-ind["CFD"] = ind["CFD"][0:25]
+#ind["CFD"] = ind["CFD"][0:25]
 
 #Prompt to calculate numerically the derivative of the response matrix with respect to CFDº
 

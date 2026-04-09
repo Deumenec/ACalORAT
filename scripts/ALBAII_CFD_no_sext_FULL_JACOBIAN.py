@@ -48,7 +48,9 @@ p              ={"lin_all"        :  True,  #To turn off higher order multipoles
 
 ring, ind = read.ALBAII(ROOT  / "data" / "ring_a2.mat")
 
-    
+ 
+ind["dip"] = ind["dip"][:25]   
+
 if p["lin_all"] == True: #DESACTIVA TOTS ELS Sextupols i ordres superiors 
     for element in filter(at.checkattr("PolynomB"), ring):
         #print(element.FamName)

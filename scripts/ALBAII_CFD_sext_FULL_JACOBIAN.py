@@ -126,19 +126,19 @@ x_sex_ana  = x_sex #cORM.dxldCFDk(cORM.bpm, cORM.cor, cORM.dip, cORM.sex)
 dx_sex_ana = dx_sex #cORM.dpxldCFDk(cORM.bpm, cORM.cor, cORM.dip, cORM.sex)
 dKicksH_dCFD_ana = 0
 #TODO: write the theta the theta analytically and validate!
-dtheta_sex = AnaORM.extract_kicks(dKicksH_dCFD,ind["cor"]["h"], ind["sex"])
+#dtheta_sex = AnaORM.extract_kicks(dKicksH_dCFD,ind["cor"]["h"], ind["sex"])
 
 #Put the relevant constants in the right broadcasting dimensions
 x_sex_ana  = x_sex_ana[None, None, :, :]
 dx_sex_ana = dx_sex_ana[None, None, :, :]
-dtheta_sex = dtheta_sex[None, None, :, :]
+dtheta_sex = dKicksH_dCFD[None, None, :, :]
 
 #Revert broadcasters
 cORM.bpm.broadcasters(0, 3)
 cORM.cor.broadcasters(1, 3)
 cORM.dip.broadcasters(2, 3)
 #Sembla malament l'horitzontal total fet així!
-thickh = ( cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip) 
+thickh = ( cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.dip) 
           + 0*cORM.dRij_dqk_thick23_disp(cORM.bpm, cORM.cor, cORM.dip) #Aquí aquest terme ajuda però falta bastanta cosa!!!
           + cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["h"], denergy))
 
@@ -168,7 +168,7 @@ cORM.dip.broadcasters(2, 3)
 #Broadcasting estàn hard-coded així que millor no tocar res sense validar
 
 
-thickv = (cORM.dRij_dqk_thick23_master(cORM.bpm, cORM.cor, cORM.dip) 
+thickv = (cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.dip) 
           + 0*cORM.dRij_dk_energy_term(cORM.bpm, cORM.cor, cORM.dip, dRij_dEnergy["v"], denergy))
 
 #Finally, we add the sextupole term by rebuilding the broadcasters

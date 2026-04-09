@@ -38,8 +38,14 @@ step           =  10**(-step_exp)
 read_numerical =  True
 dispersion     =  True  #Important ja que sino tot petaria amb la cromaticitat! calcular les matrius amb dispersió.
 lin_all        =  False  #To turn off higher order multipoles
-max_            =  2     #cutoff index in polynomB
-calc_dq        =  True
+max_ind        =  2     #cutoff index in polynomB
+
+
+###############################################################################
+# Number of times dipoles are split for the method
+###############################################################################
+
+spl = 10 #Number of times the correctors
 
 
 ###############################################################################
@@ -89,12 +95,11 @@ for i in ind["cor"]["v"]: ring[i].KickAngle = np.array([0,0])
 if read_numerical == False:
     #I add kick angle variable to perform the numerical ORM calculation
     #IMPORTANT, add ind_cor[sub_direction] for ALBA2
-    if calc_dq:
-        for i in ind["cor"]["h"]: ring[i].KickAngle = np.array([0,0])
-        #numerical_ORM = numerical.dORM_dq(ring, ind["bpm"], ind["cor"]["h"], ind["CFD"], step, "h")
-        #np.save(os.path.join(results,prefix +"h_numdORM_dq"),numerical_ORM)
-        numerical_ORM = numerical.dORM_dq(ring, ind["bpm"], ind["cor"]["v"], ind["CFD"], step, "v")
-        np.save(os.path.join(results,prefix +"v_numdORM_dq"),numerical_ORM)
+    for i in ind["cor"]["h"]: ring[i].KickAngle = np.array([0,0])
+    #numerical_ORM = numerical.dORM_dq(ring, ind["bpm"], ind["cor"]["h"], ind["CFD"], step, "h")
+    #np.save(os.path.join(results,prefix +"h_numdORM_dq"),numerical_ORM)
+    numerical_ORM = numerical.dORM_dq(ring, ind["bpm"], ind["cor"]["v"], ind["CFD"], step, "v")
+    np.save(os.path.join(results,prefix +"v_numdORM_dq"),numerical_ORM)
 
 
 dORMH = np.load(os.path.join(results,prefix + "h_numdORM_dq.npy"))
@@ -104,7 +109,7 @@ dORMV = np.load(os.path.join(results,prefix + "v_numdORM_dq.npy"))
 #Calculating dORM with thick elements and assessing validity
 ###############################################################################
 
-spl = 1 #Number of times the correctors
+
 
 #SPLITTING SEEMS TO MAKE EVERYTHING WORSE SO THERE IS NO POINT!
 def split_el(ring, i, num):
@@ -156,11 +161,6 @@ thickv = np.squeeze(cORM.dRij_dqk_thick23(cORM.bpm, cORM.cor, cORM.dip))
 thickv_bo = np.zeros((208,176, 176))
 for i in range(208):
     thickv_bo[i,:,:] = np.sum(thickv[i*spl:(i+1)*spl, :, :], axis = 0)
-    
-##########################################################
-
-plot_utils.plot_both_Zeus(dORMV, dORMH, thickv_bo, thickv_bo)
-
 
 
 ##########################################################

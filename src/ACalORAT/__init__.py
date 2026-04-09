@@ -15,7 +15,7 @@ pip install pdoc
 
 and inside the folder of the project run:
 
-pdoc --math ./ACalORAT -o ./docs
+pdoc --math ./src/ACalORAT -o ./docs
 
 
 """

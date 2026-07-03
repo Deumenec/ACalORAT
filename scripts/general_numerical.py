@@ -188,10 +188,15 @@ class NumericalCalculation:
                 np.save(self._array_path(f"numerical_{d}"), num)
 
         else:
-            # dORM_dCFD computes both directions and handles the feedback loop
+            # Map elements parameter to a variation mode for dORM_dCFD:
+            #   "CFD" → vary both K0 and K1 maintaining CFD geometry (default)
+            #   "dip" → vary only K0 (dipole component)
+            #   "quad" → vary only K1 (quadrupole component, K0 unchanged)
+            el_mode = {"CFD": "CFD", "dip": "dip", "quad": "quad"}.get(elements, "CFD")
             results_cfd = numerical.dORM_dCFD(
                 self.ring, self.ind, self.params["step"],
-                num=self.params["n_elements"], method=feedback
+                num=self.params["n_elements"], method=feedback,
+                ind_el=ind_el, mode=el_mode, multithread=True
             )
             num_h, num_v, dfreq, dkicks_h, dkicks_v, x_sex, dx_sex, energy, ddisp = results_cfd
 

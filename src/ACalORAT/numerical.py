@@ -121,7 +121,7 @@ def compute_single_dip_pure(ring, quad, direction, step, ind_bpm, ind_cor):
     resp1 = Resp_local.build_tracking(tol=1e-13, max_iterations=150)
     optics1 = at.get_optics(local_ring, refpts=range(len(local_ring)))
     energy1 = optics1[2]["closed_orbit"][:, 4]
-    disp1   = optics1[1]["dispersion"][ind_bpm, 0]
+    disp1   = optics1[2]["dispersion"][ind_bpm, 0]
 
     #Steping down the local ring for the second derivative
     elem.PolynomB[0] += -2*step
@@ -133,7 +133,7 @@ def compute_single_dip_pure(ring, quad, direction, step, ind_bpm, ind_cor):
     resp2 = Resp_local.build_tracking(tol=1e-13, max_iterations=150)
     optics2 = at.get_optics(local_ring, refpts=range(len(local_ring)))
     energy2 = optics2[2]["closed_orbit"][:, 4]
-    disp2   = optics2[1]["dispersion"][ind_bpm, 0]
+    disp2   = optics2[2]["dispersion"][ind_bpm, 0]
 
     result = {"num_dORM_dq"  : (resp1 - resp2) / (2*step),
               "energy"       : np.average((energy1 - energy2))/(2*step),
@@ -442,10 +442,10 @@ def Cor_SVD_cor(ring, ind, threshold, original_orbit, ORMH, ORMV, recalc_step=12
         if step == recalc_step:
             print(f"Step {step}: Recalculating ORM...")
             # ... (Same as before) ...
-            Resp_H = at.latticetools.OrbitResponseMatrix(ring, "h", ind["bpm"], ind["cor"]["h"])
-            Resp_V = at.latticetools.OrbitResponseMatrix(ring, "v", ind["bpm"], ind["cor"]["v"])
-            Resp_H.build_tracking()
-            Resp_V.build_tracking()
+            Resp_H = at.latticetools.OrbitResponseMatrix(ring, "h", ind["bpm"], ind["cor"]["h"], steerdelta=5e-7)
+            Resp_V = at.latticetools.OrbitResponseMatrix(ring, "v", ind["bpm"], ind["cor"]["v"], steerdelta=5e-7)
+            Resp_H.build_tracking(tol=1e-13, max_iterations=150)
+            Resp_V.build_tracking(tol=1e-13, max_iterations=150)
             local_ORMH = Resp_H.response
             local_ORMV = Resp_V.response
 
@@ -528,26 +528,40 @@ def Cor_SVD_cor(ring, ind, threshold, original_orbit, ORMH, ORMV, recalc_step=12
     return t_kicks, t_d_ring_freq, orbit
 
 
-def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
+def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method, mode="CFD"):
     """
     Computes derivatives using Central Difference (f(x+h) - f(x-h)) / 2h.
+
+    mode : str
+        "CFD"  — vary both K1 and K0 maintaining the CFD geometry ratio (default)
+        "dip"  — vary only K0 (dipole component), K1 unchanged
+        "quad" — vary only K1 (quadrupole component), K0 unchanged
     """
-    print("HOLAAAAAA")
     # GEOMETRY
     base_element = ring[CFD]
     length = base_element.Length if getattr(base_element, 'Length', 0) != 0 else 1.0
-    
+
     # Bending
     angle = getattr(base_element, 'BendingAngle', 0.0)
     B0 = angle / length
-    
-    # Calculate Ratio (Dipole / Quadrupole) to maintain CFD geometry
+
+    # Ratio (Dipole / Quadrupole) used to maintain CFD geometry
     val_quad = base_element.PolynomB[1]
-    
-    if val_quad != 0:
+
+    if val_quad != 0 and hasattr(base_element, "BendingAngle"):
         ratio = B0 / val_quad
     else:
-        ratio = 0.0 
+        ratio = 0.0
+
+    if mode == "dip":
+        k1_scale = 0.0
+        k0_scale = ratio   # K0 change = step * ratio, so step keeps K1 convention
+    elif mode == "quad":
+        k1_scale = 1.0
+        k0_scale = 0.0
+    else:  # "CFD": maintain geometry
+        k1_scale = 1.0
+        k0_scale = ratio
 
     # --- 2. INTERNAL HELPER FOR SIMULATION ---
     def _get_state(perturbation_sign):
@@ -555,30 +569,30 @@ def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
         Runs the simulation for a specific perturbation direction (+1 or -1).
         """
         local_ring = copy.deepcopy(ring)
-        
-        # Apply Perturbation (+step or -step)
+
+        # Apply Perturbation (+step or -step) according to mode
         delta = step * perturbation_sign
-        local_ring[CFD].PolynomB[1] += delta
-        local_ring[CFD].PolynomB[0] += delta * ratio
-        
+        local_ring[CFD].PolynomB[1] += delta * k1_scale
+        local_ring[CFD].PolynomB[0] += delta * k0_scale
+
         # --- FEEDBACK LOOP (CORRECTION) ---
         t_kicks = {"h": np.zeros(len(ind["cor"]["h"])), 
                    "v": np.zeros(len(ind["cor"]["v"]))}
         t_df = 0.0
 
         if method == "Cor_SVD":
-            t_kicks, t_df, _   = Cor_SVD_cor(local_ring, ind, 1e-12, closed_orbit, ORMH, ORMV) 
+            t_kicks, t_df, _   = Cor_SVD_cor(local_ring, ind, 1e-13, closed_orbit, ORMH, ORMV)
         elif method == "Full_SVD":
-            t_kicks, t_df, _   = Full_SVD_cor(local_ring, ind, 1e-12, closed_orbit, ORMH, ORMV) 
+            t_kicks, t_df, _   = Full_SVD_cor(local_ring, ind, 1e-13, closed_orbit, ORMH, ORMV)
         
         # --- COMPUTE RESPONSE MATRIX ---
         Resp_localH = at.latticetools.OrbitResponseMatrix(
-            local_ring, "h", ind["bpm"], ind["cor"]["h"])
+            local_ring, "h", ind["bpm"], ind["cor"]["h"], steerdelta=5e-7)
         Resp_localV = at.latticetools.OrbitResponseMatrix(
-            local_ring, "v", ind["bpm"], ind["cor"]["v"])
-        
-        Resp_localH.build_tracking()
-        Resp_localV.build_tracking()
+            local_ring, "v", ind["bpm"], ind["cor"]["v"], steerdelta=5e-7)
+
+        Resp_localH.build_tracking(tol=1e-13, max_iterations=150)
+        Resp_localV.build_tracking(tol=1e-13, max_iterations=150)
 
         # --- COMPUTE ORBIT FOR SEXTUPOLES ---
 
@@ -587,14 +601,10 @@ def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
         x_sexp= np.array([i[1] for i in new_orbit])[ind["sex"]]
         energy = np.average(new_orbit[:,4])
         
-        new_optics = at.get_optics(ring, refpts=range(len(ring)))[2]
-        
+        new_optics = at.get_optics(local_ring, refpts=range(len(local_ring)))[2]
+
         bpm_disp = np.array([i[0] for i in new_optics["dispersion"]])[ind["sex"]]
-        
-        disp = new_optics["dispersion"]
-        avdisp = compute_average_dispersion(local_ring, ind["cor"]["h"],disp )
-        cond = np.sum(t_kicks["h"] * avdisp)
-        print(f"AFTER CORRECTION, THE ENERGY CHANGE IN CORRECTORS IS: {cond}")
+
         return {
             "H": Resp_localH.response,
             "V": Resp_localV.response,
@@ -628,36 +638,57 @@ def compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method):
         "ddisp":   (state_plus["bpm_disp"] - state_minus["bpm_disp"]) / denominator
     }
 
-def dORM_dCFD(ring, ind ,step, num=None, multithread=False, method="Cor_SVD"):
+def dORM_dCFD(ring, ind, step, num=None, multithread=False, method="Cor_SVD",
+              ind_el=None, mode="CFD"):
     """
     Returns:
-        dORM_H, dORM_V, dFreq_vec, dKicksH_mat, dKicksV_mat
-        ind: dictionary containing all the indices
+        dORM_H, dORM_V, dFreq_vec, dKicksH_mat, dKicksV_mat, x_sex, dx_sex, energy, dni_dCFD
+
+    Parameters
+    ----------
+    ind_el : array-like, optional
+        Element indices to vary. Defaults to ind["CFD"].
+    mode : str
+        Variation mode passed to compute_single_CFD:
+        "CFD"  — vary K1 and K0 maintaining CFD geometry ratio (default)
+        "dip"  — vary only K0 (dipole component)
+        "quad" — vary only K1 (quadrupole component)
     """
 
     # 1. Initialize Storage Arrays
-    # If num is specified, we limit the output size
-    n_calcs = len(ind["CFD"]) if num is None else min(len(ind["CFD"]), num)
-    target_cfds = ind["CFD"][:n_calcs]
+    if ind_el is None:
+        ind_el = ind["CFD"]
+    n_calcs = len(ind_el) if num is None else min(len(ind_el), num)
+    target_cfds = ind_el[:n_calcs]
 
     # Initialize Base Response Matrices to get shapes
     print("Calculating Base ORMs...")
-    RespH = at.latticetools.OrbitResponseMatrix(ring, "h", ind["bpm"], ind["cor"]["h"])
-    RespH.build_tracking() # FIX: build_tracking returns None, modifies in place
-    ORMH = RespH.response 
+    RespH = at.latticetools.OrbitResponseMatrix(ring, "h", ind["bpm"], ind["cor"]["h"], steerdelta=5e-7)
+    RespH.build_tracking(tol=1e-13, max_iterations=150)
+    ORMH = RespH.response  # (n_bpm, n_cor_h)
 
-    RespV = at.latticetools.OrbitResponseMatrix(ring, "v", ind["bpm"], ind["cor"]["v"])
-    RespV.build_tracking() # FIX: build_tracking returns None
-    ORMV = RespV.response
-    np.save("ORMH", ORMH)
-    np.save("ORMV", ORMH)
+    RespV = at.latticetools.OrbitResponseMatrix(ring, "v", ind["bpm"], ind["cor"]["v"], steerdelta=5e-7)
+    RespV.build_tracking(tol=1e-13, max_iterations=150)
+    ORMV = RespV.response  # (n_bpm, n_cor_v)
+
+    # For Full_SVD the feedback solver needs ORMH augmented with the frequency
+    # response as its last column: dOrbit/dfreq = -eta_bpm / (mcf * f0).
+    # Building it explicitly guarantees the frequency column is always last.
+    if method == "Full_SVD":
+        mcf_val = get_mcf(ring)
+        f0      = ring.get_rf_frequency()
+        disp_bpm = at.get_optics(ring, refpts=range(len(ring)))[2]["dispersion"][ind["bpm"], 0]
+        freq_col = (-disp_bpm / (mcf_val * f0)).reshape(-1, 1)
+        ORMH = np.column_stack([ORMH, freq_col])  # (n_bpm, n_cor_h + 1)
 
     closed_orbit = at.find_orbit6(ring, refpts=range(len(ring)))[1] 
         
-    # 2. Allocate Result Arrays
-    # Shapes: [N_CFD, N_BPM, N_COR]
-    num_dORM_dqH = np.zeros((n_calcs, *ORMH.shape))
-    num_dORM_dqV = np.zeros((n_calcs, *ORMV.shape))
+    # 2. Allocate Result Arrays — always (n_CFD, n_BPM, n_cor), never includes RF column
+    n_bpm   = len(ind["bpm"])
+    n_cor_h = len(ind["cor"]["h"])
+    n_cor_v = len(ind["cor"]["v"])
+    num_dORM_dqH = np.zeros((n_calcs, n_bpm, n_cor_h))
+    num_dORM_dqV = np.zeros((n_calcs, n_bpm, n_cor_v))
     
     # Shapes: [N_CFD] (Scalar frequency change per CFD)
     dFreq_dCFD = np.zeros(n_calcs)
@@ -678,13 +709,13 @@ def dORM_dCFD(ring, ind ,step, num=None, multithread=False, method="Cor_SVD"):
     if not multithread:
         for i, CFD in enumerate(target_cfds):
             print(f"Processing {i+1}/{n_calcs} (CFD index {CFD})")
-            res = compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method)
+            res = compute_single_CFD(ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method, mode)
             results.append(res)
-            
+
     else:
-        results = Parallel(n_jobs=-2, verbose=6)(
+        results = Parallel(n_jobs=-1, verbose=6)(
             delayed(compute_single_CFD)(
-                ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method
+                ring, CFD, ORMH, ORMV, step, ind, closed_orbit, method, mode
             ) for CFD in target_cfds
         )
     
@@ -834,8 +865,7 @@ def Full_SVD_cor(ring, ind, threshold, original_orbit, ORMH, ORMV, recalc_step=1
     
     ind_bpm = ind["bpm"]
     ind_cor = ind["cor"]
-    cav_ind = at.get_refpts(ring, at.RFCavity)
-    
+
     t_kicks = {"h": np.zeros(len(ind_cor["h"])), "v": np.zeros(len(ind_cor["v"]))}
     t_d_ring_freq = 0.0
     ring_freq = ring.get_rf_frequency()
@@ -860,15 +890,22 @@ def Full_SVD_cor(ring, ind, threshold, original_orbit, ORMH, ORMV, recalc_step=1
         
         if step == recalc_step:
             Resp_H = at.latticetools.OrbitResponseMatrix(
-                ring, "h", bpmrefs=ind_bpm, steerrefs=ind_cor["h"], cavrefs=cav_ind
+                ring, "h", bpmrefs=ind_bpm, steerrefs=ind_cor["h"], steerdelta=5e-7
             )
-            Resp_H.build_tracking(tol=1e-12, max_iterations=100)
-            ORMH = Resp_H.response
-            
+            Resp_H.build_tracking(tol=1e-13, max_iterations=150)
+            ORMH_cor = Resp_H.response  # (n_bpm, n_cor_h)
+
+            # Rebuild frequency column from current optics
+            mcf_val  = get_mcf(ring)
+            f_now    = ring.get_rf_frequency()
+            disp_bpm = at.get_optics(ring, refpts=range(len(ring)))[2]["dispersion"][ind_bpm, 0]
+            freq_col = (-disp_bpm / (mcf_val * f_now)).reshape(-1, 1)
+            ORMH = np.column_stack([ORMH_cor, freq_col])
+
             Resp_V = at.latticetools.OrbitResponseMatrix(
-                ring, "v", bpmrefs=ind_bpm, steerrefs=ind_cor["v"]
+                ring, "v", bpmrefs=ind_bpm, steerrefs=ind_cor["v"], steerdelta=5e-7
             )
-            Resp_V.build_tracking(tol=1e-12, max_iterations=100)
+            Resp_V.build_tracking(tol=1e-13, max_iterations=150)
             ORMV = Resp_V.response
 
         # --- APPLY THE DISPERSION CONSTRAINT ---

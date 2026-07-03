@@ -31,7 +31,6 @@ class BaseIntegrals:
     
     def Sabn(self, Ea: Elements, Eb: Elements, n: int):
         """ """
-        #The minus epsilon ensures that sign(0) = -1 as defined in the report.
         return np.sign(Ea.muB-Eb.muB-0.0000001)*np.sin(n*np.abs(Ea.muB-Eb.muB)-n*np.pi*self.tune)
     
     def Ik0_(self, Ek: Elements):

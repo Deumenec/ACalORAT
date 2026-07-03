@@ -13,9 +13,8 @@ class dORM_dq(BaseIntegrals):
         Considers all elements as thin, results can be greatlly improved by passing average
         optics computed with the average method instead of the entrance optics, but for thick
         elements one has to use the thick version of the formula.
-        
-        
         """
+        self._check_broadcasters(Ei, Ej, Ek)
         Cij1 = self.Cabn(Ei, Ej, 1)
         Cik2 = self.Cabn(Ei, Ek, 2)
         Cjk2 = self.Cabn(Ej, Ek, 2)
@@ -38,6 +37,10 @@ class dORM_dq(BaseIntegrals):
         """
         Computes the Jacobian of the ORM with respect to changing thin quadrupoles but thick correctors.
         """
+        
+        self._check_broadcasters(Ei, Ej, Ek)
+        Ek.correct_entrance() #Remember it is only applied if it has not been previously applied.
+        
         Cij1 = self.Cabn(Ei, Ej, 1)
         Cik2 = self.Cabn(Ei, Ek, 2)
         Cjk2 = self.Cabn(Ej, Ek, 2)
@@ -67,6 +70,10 @@ class dORM_dq(BaseIntegrals):
         """
         Computes the dRij_dqk asssuming only thick quadrupoles
         """
+        self._check_broadcasters(Ei, Ej, Ek)
+        
+        Ek.correct_entrance() #Remember it is only applied if it has not been previously applied.
+        
         Cij1 = self.Cabn(Ei, Ej, 1)
         Cik2 = self.Cabn(Ei, Ek, 2)
         Cjk2 = self.Cabn(Ej, Ek, 2)
@@ -74,7 +81,7 @@ class dORM_dq(BaseIntegrals):
         Sik2 = self.Sabn(Ei, Ek, 2)
         Sjk2 = self.Sabn(Ej, Ek, 2)
         
-        #Terms for thick quadrupole formula        
+        #Terms for thick quadrupole formulas
         Ik0  = self.Ik0(Ek)
         Iks2 = self.Iks2(Ek)
         Ikc2 = self.Ikc2(Ek)
@@ -131,7 +138,7 @@ class dORM_dq(BaseIntegrals):
         else:
             Ijc1_L = self.Ikc1_(Ej)
             Ijs1_L = self.Iks1_(Ej)
-        
+
         dRij_terms =  (Cij1 * ( CCik2 + CCjk2 + 2*Ik0 *np.cos(np.pi * self.tune)**2) + 
                        Sij1 * ( SSik2 - SSjk2 + Ik0*np.sin(2*np.pi*self.tune)*(2*np.heaviside(Ei.muB-Ek.muB, 0)
                            -2*np.heaviside(Ej.muB-Ek.muB, 0)-np.sign(Ei.muB-Ej.muB)))) 

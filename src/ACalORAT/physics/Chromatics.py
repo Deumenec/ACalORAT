@@ -128,7 +128,54 @@ class Chromatics(BaseIntegrals):
         d_delta_dqk = term1 + term2
         
         return d_delta_dqk
-    
+
+    def dkicksdCFDk(self, Ei: Elements, Ej: Elements, Ek: Elements):
+        """
+        Corrector kick change when varying CFDs with Cor_SVD feedback.
+
+        Includes the frequency-correction contribution: the corrector kicks change
+        the path length, the RF adjusts to compensate (shifting energy by dδ_non_CFD),
+        and extra kicks are needed to handle the dispersive orbit from that energy shift.
+
+            Class       Broadcast dim
+        Ei: bpms        (0,3)    n
+        Ej: cor         (1,3)    m
+        Ek: CFD         (2,3)    k
+
+        Formula (our sign convention, where kicks match Cor_SVD_cor output):
+            dθ_m = R⁻¹_{nm} R_{nk} (b/q) + dδ_{non_CFD} · R⁻¹_{nm} η_n
+            dδ_{non_CFD} = −(η_m R⁻¹ R_{nk} b/q) / (η_m R⁻¹ η_n)  [< 0]
+        dδ is negative so the correction reduces the total kick magnitude.
+
+        Returns:
+            shape (n_CFD, n_cor)
+            axis 0: CFD
+            axis 1: corrector
+        """
+        eta_n = np.squeeze(Ei.dispersion)                  # (N_BPM,)
+        if not hasattr(Ej, 'avDispersion'):
+            Ej.average()
+        eta_m = np.squeeze(Ej.avDispersion)                # (M_COR,)
+
+        Rnm = np.squeeze(self.Rab_thick2_(Ei, Ej)  + self.Rab_thick2_disp(Ei, Ej))  # (N_BPM, M_COR)
+        Rnk = np.squeeze(self.Rab_thick2_K(Ei, Ek) + self.Rab_thick2_disp(Ei, Ek))  # (N_BPM, K_CFD)
+
+        geometry = Ek.Bend / Ek.K                          # (K_CFD,) — K after correct_entrance
+        R_inv    = np.linalg.pinv(Rnm)                     # (M_COR, N_BPM)
+
+        hcm       = (R_inv @ Rnk) * geometry               # (M_COR, K_CFD) — first-order kicks
+        denom     = eta_m @ R_inv @ eta_n                  # scalar
+        R_inv_eta = R_inv @ eta_n                          # (M_COR,)
+
+        # dδ_non_CFD: energy from corrector-induced path length (used by RF feedback)
+        d_delta = -(eta_m @ hcm) / denom                   # (K_CFD,)
+
+        # Full kicks: first-order correction + frequency-adjustment kicks
+        # kicks2 = R_inv_eta * d_delta (same sign: d_delta < 0 reduces total correction)
+        kicks = hcm + R_inv_eta[:, None] * d_delta[None, :]  # (M_COR, K_CFD)
+
+        return np.real(kicks.T)                             # (K_CFD, M_COR)
+
     def dxldCFDk(self, Ei: Elements, Ej: Elements, Ek: Elements, El: Elements):
         """
         Orbit displacement in sextupoles ENTRANCE

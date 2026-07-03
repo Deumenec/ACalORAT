@@ -95,9 +95,10 @@ class dORM_dq(BaseIntegrals):
     
     def dRij_dqk_thick23(self, Ei : Elements, Ej : Elements, Ek : Elements):
         """
-        Computes the dRij_dqk asssuming thick correctors without quadrupolar 
+        Computes the dRij_dqk asssuming thick correctors without quadrupolar
         component and thick quadrupoles
         """
+        self._check_broadcasters(Ei, Ej, Ek)
         Ek.correct_entrance() #Remember it is only applied if it has not been previously applied.
         
         Cij1 = self.Cabn(Ei, Ej, 1)
@@ -148,7 +149,7 @@ class dORM_dq(BaseIntegrals):
         """
         Computes the dRij_dqk dispersion term, which is relevant in the HORIZONTAL direction
         """
-
+        self._check_broadcasters(Ei, Ej, Ek)
         Ej2 = Elements(self.ring, self.all_optics, Ej._ind -1, self.dir_ind, self.sgn)
         Ej2.broadcasters(Ej._bAxis, Ej._ndim)
         dni_dqk = self.dni_dqk_integral(Ei, Ek)

@@ -11,6 +11,7 @@ class ORM:
     def Rab_thick2_(self, Ea : Elements, Eb: Elements):
         """ Returns the ORM with thick correctors WITHOUT quadrupolar moment inside
         """
+        self._check_broadcasters(Ea, Eb)
         Cij1 = self.Cabn(Ea, Eb, 1)
         Sij1 = self.Sabn(Ea, Eb, 1)
         
@@ -22,6 +23,7 @@ class ORM:
     def Rab_thick2_K(self, Ea : Elements, Eb: Elements):
         """ Returns the ORM with thick correctors WITH quadrupolar moment inside
         """
+        self._check_broadcasters(Ea, Eb)
         Eb.correct_entrance()
         Cij1 = self.Cabn(Ea, Eb, 1)
         Sij1 = self.Sabn(Ea, Eb, 1)
@@ -36,6 +38,7 @@ class ORM:
         """ Returns the dispersion term of the ORM with thick correctors WITHOUT quadrupolar moment inside and no dipole component
         Basically it takes the average...
         """
+        self._check_broadcasters(Ea, Eb)
         if not hasattr(Eb, 'avDispersion'):
             Eb.average()
         return np.real(-Ea.dispersionB*(Eb.avDispersionB))/(self.mcf*self.circumference)

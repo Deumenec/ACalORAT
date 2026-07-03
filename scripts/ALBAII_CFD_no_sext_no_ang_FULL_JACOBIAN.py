@@ -21,7 +21,7 @@ from ACalORAT import plot_utils
 
 ROOT = Path(__file__).resolve().parent.parent
 
-SAVE = ROOT / "outputs" / "ALBAII_CFD_no_sext"
+SAVE = ROOT / "outputs" / "ALBAII_CFD_no_sext_no_ang"
 
 os.chdir(ROOT)
 if not os.path.exists(SAVE):
@@ -34,22 +34,34 @@ if not os.path.exists(SAVE):
     
 lattice_file   = 'ring_a2.mat' #Read ALBA II lattice ring_a2.mat or THERING.mat to read the ALBA one
 results        = 'A2' #A1 for the ALBA lattice and A2 for the ALBAII lattice and CFDA2
-step           =  1e-5
+step           =  1e-6
 
 p              ={"lin_all"        :  True,  #To turn off higher order multipoles
                  "max_ind"        :  2,      #Cutoff index in polynomB, simplifies the ring for certain calculations
                  "calculate"      :  True}
 
 
-#########################
-######################################################
+###############################################################################
 # Reading the lattice parameters
 ###############################################################################
 
 ring, ind = read.ALBAII(ROOT  / "data" / "ring_a2.mat")
 
+
+###############################################################################
+# EXTRA: REMOVING ALL ENTRANCE ANGLES
+###############################################################################
+
+"""
+for i in ind["dip"]: 
+    ring[i].EntranceAngle = 0
+    ring[i].ExitAngle = 0
+"""
+
+
  
 ind["dip"] = ind["dip"][:25]   
+
 
 if p["lin_all"] == True: #DESACTIVA TOTS ELS Sextupols i ordres superiors 
     for element in filter(at.checkattr("PolynomB"), ring):
@@ -76,7 +88,7 @@ pathCFD = "Cor_SVD"
 if  p["calculate"]:
     if not os.path.exists(SAVE / pathCFD):
         os.mkdir(SAVE / pathCFD)
-    num_dORM_dqH, num_dORM_dqV, dFreq_dCFD, dKicksH_dCFD, dKicksV_dCFD, x_sex, energy, dni_dCFD = numerical.dORM_dCFD(ring, ind, step ,multithread=True, method="Cor_SVD") #In ALBAII all dipoles are CFD!
+    num_dORM_dqH, num_dORM_dqV, dFreq_dCFD, dKicksH_dCFD, dKicksV_dCFD, x_sex, energy = numerical.dORM_dCFD(ring, ind, step ,multithread=True, method="Cor_SVD") #In ALBAII all dipoles are CFD!
     np.save(SAVE /pathCFD /"num_dORM_dqH",num_dORM_dqH)
     np.save(SAVE /pathCFD /"num_dORM_dqV",num_dORM_dqV)
     np.save(SAVE /pathCFD /"dFreq_dCFD",dFreq_dCFD)
@@ -84,8 +96,6 @@ if  p["calculate"]:
     np.save(SAVE /pathCFD /"dKicksV_dCFD",dKicksV_dCFD)
     np.save(SAVE /pathCFD /"x_sex",x_sex)
     np.save(SAVE /pathCFD /"energy",energy)
-    np.save(SAVE /pathCFD /"dni_dCFD",dni_dCFD)
-
     
 
 else:
@@ -97,8 +107,6 @@ else:
         dKicksV_dCFD = np.load(SAVE /pathCFD /"dKicksV_dCFD.npy")
         x_sex        = np.load(SAVE /pathCFD /"x_sex.npy")
         energy       = np.load(SAVE /pathCFD /"energy.npy")
-        dni_dCFD       = np.load(SAVE /pathCFD /"dni_dCFD.npy")
-
     except:
         raise ImportError("No hi ha respostes calculades")
 

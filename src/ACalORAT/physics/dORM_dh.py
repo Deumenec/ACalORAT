@@ -12,34 +12,25 @@ class dORM_dh(BaseIntegrals):
     
     def dRij_dk_energy_term(self, Ei: Elements, Ej: Elements, Ek: Elements, dRij_dEnergy, dEnergy):
         """
-
-        Uses the Jacobian of the ORM with respect to energy and the change in energy due 
+        Uses the Jacobian of the ORM with respect to energy and the change in energy due
         to a change in a given element to calculate the contribution of it to the Jacobian of the ORM.
 
-        Ei: bpms in horizontal          0 
-
-        Ej: corectors in horizontal     1
-
-        Ek: CFD in horizontal           2
+        dRij_dEnergy : (n_BPM, n_cor) — ORM derivative wrt energy
+        dEnergy      : (n_element,)   — energy change per element
+        Returns shape  (n_element, n_BPM, n_cor)
         """
-        
-        #TODO: Calculate analytically the dRij_dEnergy
-
-        term = np.real(dEnergy[None, None,:] * dRij_dEnergy[: , :, None])
+        self._check_broadcasters(Ei, Ej, Ek)
+        # element at axis 0, BPM at axis 1, cor at axis 2
+        term = np.real(dEnergy[:, None, None] * dRij_dEnergy[None, :, :])
 
         return term
     
     def dRij_dbend_thick23_disp(self, Ei : Elements, Ej : Elements, Ek : Elements):
         """
         Computes the dRij_dbend dispersion term, which is relevant in the HORIZONTAL
-        transverse dimension when changing the dipole component of a CFD. It is scaled for
-        a proportional change to the quadrupole!
-        
-        Ei: BPMs,         1
-        Ej: correctors,   2
-        Ek: CFDs,         0
+        transverse dimension when changing the dipole component of a CFD.
         """
-        
+        self._check_broadcasters(Ei, Ej, Ek)
         geometry = Ek.BendB / (Ek.KB)
         
         dni_dbend = Ek.LengthB * self.Rab_thick2_K(Ei, Ek) 

@@ -119,23 +119,26 @@ def compute_single_dip_pure(ring, quad, direction, step, ind_bpm, ind_cor):
         local_ring, direction, ind_bpm, ind_cor, steerdelta = 5e-7)
     
     resp1 = Resp_local.build_tracking(tol=1e-13, max_iterations=150)
-    energy1 = at.get_optics(local_ring, refpts=range(len(local_ring)))[2]["closed_orbit"][:, 4]
-    
+    optics1 = at.get_optics(local_ring, refpts=range(len(local_ring)))
+    energy1 = optics1[2]["closed_orbit"][:, 4]
+    disp1   = optics1[1]["dispersion"][ind_bpm, 0]
+
     #Steping down the local ring for the second derivative
     elem.PolynomB[0] += -2*step
 
     #Compute the new ORM
     Resp_local = at.latticetools.OrbitResponseMatrix(
         local_ring, direction, ind_bpm, ind_cor, steerdelta = 5e-7)
-    
+
     resp2 = Resp_local.build_tracking(tol=1e-13, max_iterations=150)
-    
-    energy2 = at.get_optics(local_ring, refpts=range(len(local_ring)))[2]["closed_orbit"][:, 4]
-    
-    result = {"num_dORM_dq": (resp1 - resp2) / (2*step),
-              "energy": np.average((energy1 - energy2))/(2*step)}
-    #We also return the energy for debugging
-    
+    optics2 = at.get_optics(local_ring, refpts=range(len(local_ring)))
+    energy2 = optics2[2]["closed_orbit"][:, 4]
+    disp2   = optics2[1]["dispersion"][ind_bpm, 0]
+
+    result = {"num_dORM_dq"  : (resp1 - resp2) / (2*step),
+              "energy"       : np.average((energy1 - energy2))/(2*step),
+              "dispersion"   : (disp1 - disp2) / (2*step)}
+
     return result
 
 def single_snum_quad(ring, quad, ORM, direction, step, ind):
@@ -284,15 +287,16 @@ def dORM_dbend(ring, ind_bpm, ind_cor, ind_quad, step, direction):
     
     """
     num_dORM_dq = np.zeros([len(ind_quad), len(ind_bpm), len(ind_cor)])
-    energy = np.zeros([len(ind_quad)])
-    results = []
+    energy      = np.zeros([len(ind_quad)])
+    dispersion  = np.zeros([len(ind_quad), len(ind_bpm)])
     results = Parallel(n_jobs=-3, verbose=10)(
         delayed(compute_single_dip_pure) (ring, quad, direction, step, ind_bpm, ind_cor) for quad in ind_quad)
     for i, res in enumerate(results):
-        energy[i] = res["energy"]
+        energy[i]      = res["energy"]
         num_dORM_dq[i] = res["num_dORM_dq"]
-        
-    return num_dORM_dq, energy
+        dispersion[i]  = res["dispersion"]
+
+    return num_dORM_dq, energy, dispersion
 
 def dORM_dq_semi(ring, ind, step, direction):
     """

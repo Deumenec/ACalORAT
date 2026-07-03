@@ -10,10 +10,12 @@ authors = [{name = "Domènec Huerta"}]
 readme = "README.md"
 requires-python = ">=3.8"
 
-# Specify your dependencies
 dependencies = [
     "numpy",
     "matplotlib",
     "joblib", 
     "accelerator-toolbox"
 ]
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -20,17 +20,11 @@ class Dispersion(BaseIntegrals):
         
     def dni_dqk_integral(self, Ei: Elements, Ek: Elements):
         """
-        
-        New Integral formula deduced to calculate the derivative of dispersion
-        with respect to changing a quadrupole
-                        
-        Based on thin response for dispersion from a quadrupole and integrating
-        Dispersion along the element even if it has bending.
-        In bpm i due to quadrupole (or combined function dipole) 0
-    
+        Derivative of dispersion at Ei with respect to changing quadrupole Ek.
+        Based on thin response for dispersion from a quadrupole, integrating
+        along the element even if it has bending.
         """
-        #This method is better when not applying fringe field corrections.
-
+        self._check_broadcasters(Ei, Ek)
         Cik1 = self.Cabn(Ei, Ek, 1)
         Sik1 = self.Sabn(Ei, Ek, 1)
         

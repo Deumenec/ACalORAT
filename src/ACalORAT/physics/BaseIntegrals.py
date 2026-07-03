@@ -6,6 +6,25 @@ class BaseIntegrals:
     """
     Generic inegrals used for the calculations of analytical formulas
     """
+
+    def _check_broadcasters(self, Ei, Ej, Ek=None):
+        """
+        Assigns default broadcasting axes if not already set.
+
+        2D (Ek=None) — ORM:        (bpm=0, cor=1)
+        3D (Ek given) — Jacobian:  (element=0, bpm=1, cor=2)
+
+        The check uses hasattr so that Elements objects that already have
+        broadcasting configured are never rebuilt.
+        """
+        if Ek is None:
+            if not hasattr(Ei, '_bAxis'): Ei.broadcasters(0, 2)
+            if not hasattr(Ej, '_bAxis'): Ej.broadcasters(1, 2)
+        else:
+            if not hasattr(Ek, '_bAxis'): Ek.broadcasters(0, 3)
+            if not hasattr(Ei, '_bAxis'): Ei.broadcasters(1, 3)
+            if not hasattr(Ej, '_bAxis'): Ej.broadcasters(2, 3)
+
     def Cabn(self, Ea: Elements, Eb: Elements, n: int):
         """ """
         return np.cos(n*np.abs(Ea.muB-Eb.muB)-n*np.pi*self.tune)

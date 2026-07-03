@@ -132,6 +132,7 @@ def disp_i_dk(ring, quad):
     
     return (disp_p-disp_n)/(2*step), np.average(e1-e2)/(2*step), (x_p-x_n)/(2*step), (xp_p-xp_n)/(2*step)
 
+
 def ddisp_de(ring):
     """
     Returns the derivative of dispersion with respect to changing the energy.
@@ -173,11 +174,58 @@ de_dk = np.load(SAVE / (linname + "de_dk.npy"))
 dx_dk = np.load(SAVE / (linname + "dx_dk.npy"))
 dxp_dk = np.load(SAVE / (linname + "dxp_dk.npy"))
 
+###############################################################################
+# New splitting method
+###############################################################################
+
+spl = 30
+def split_el(ring, i, num):
+    """Given a ring element i, the ring is modified to have that element 
+    split num times handling frontier and length"""
+    split_el = copy.deepcopy(ring[i])
+    if hasattr(split_el,"Length"):
+        split_el.Length = split_el.Length/num
+    else:
+        raise TypeError(f"Intentant dividir l'element {i} prim")
+    ring.pop(i)
+    if hasattr(split_el,"BendingAngle"):
+        split_el.BendingAngle = split_el.BendingAngle/num
+    for j in range(num): ring.insert(i, copy.deepcopy(split_el), copy_elements=True)
+    for j in range(num-1): 
+        ring[i+j+1].EntranceAngle = 0
+        ring[i+j].ExitAngle = 0        
+    return 
+
+
+def split_fam(ring, ind, num, ind0):
+    """"Split a family of elements in a ring each one in a certain number returns a dict """
+    i = 0
+    ind_c = copy.copy(ind)
+    split_dict = {}
+    while i<len(ind):
+        split_dict.update({ind_c[i]:np.array(range(ind_c[i], ind_c[i]+num))})
+        split_el(ring, ind_c[i], num)
+        ind_c += num-1
+        for fam in ind0:
+            if type(fam) == np.ndarray: 
+                fam += num-1
+        i += 1
+    return split_dict
+
+split_dict = split_fam(ring, ind["dip"], spl, ind)
+
+ind = read.find_ind_ALBAII(ring)
+
+
 
 
 
 
 dRij_de = np.transpose(numerical.quickdORMdEnergy_CFD(ring, ind, c_disp = 0)["h"], axes = (1, 0))
+
+
+
+
 
 
 cORM = AnaORM.AnaORM(ring,"h", ind)
@@ -191,7 +239,19 @@ bends = cORM.dip.Bend
 
 Rij = (cORM.Rab_thick2_K(cORM.bpm, cORM.dip)+ cORM.Rab_thick2_disp(cORM.bpm, cORM.dip) ) *cORM.dip.LengthB
 
-di_dk_no_sext = -dRij_de*cORM.dip.LengthB
+di_denergy = ddisp_de(ring)
+di_dk_energy_term = di_denergy[None, :]* de_dk[:, None]
+
+di_dk_no_sext_vell = -dRij_de*cORM.dip.LengthB 
+
+
+
+di_dk_no_sext = np.zeros((int(len(ind["dip"])/spl), len(ind["bpm"]))) 
+
+for i in range(208):
+    di_dk_no_sext[i,:] = np.sum(di_dk_no_sext_vell[i*spl:(i+1)*spl, :], axis = 0)
+   
+di_dk_no_sext += -0*di_dk_energy_term
 
 di_dk_k_change = cORM.dni_dqk_integral(cORM.bpm, cORM.dip) #* cORM.dip.LengthB
 

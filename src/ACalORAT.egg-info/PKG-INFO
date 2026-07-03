@@ -2,13 +2,15 @@ Metadata-Version: 2.4
 Name: ACalORAT
 Version: 0.1.0
 Summary: ACalORAT: Analysis and Calculation Project
-Author: Your Name
+Author: Domènec Huerta
 Requires-Python: >=3.8
 Description-Content-Type: text/markdown
+License-File: LICENSE
 Requires-Dist: numpy
 Requires-Dist: matplotlib
 Requires-Dist: joblib
 Requires-Dist: accelerator-toolbox
+Dynamic: license-file
 
 This is a compilation of code I wrote with the aim of developing and validating analytical formulas for the orbit response matrix 
 
